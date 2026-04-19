@@ -27,24 +27,23 @@ function AppointmentsContent() {
   const searchParams = useSearchParams();
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [dentists, setDentists] = useState<Dentist[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [clinicId, setClinicId] = useState<string | null>(null);
+  const [dentists, setDentists]         = useState<Dentist[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [clinicId, setClinicId]         = useState<string | null>(null);
 
   const [filterDentist, setFilterDentist] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [filterStatus, setFilterStatus]   = useState('');
 
-  const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
-  const [editingAppt, setEditingAppt] = useState<Appointment | null>(null);
+  const [selectedAppt, setSelectedAppt]   = useState<Appointment | null>(null);
+  const [editingAppt, setEditingAppt]     = useState<Appointment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showEditModal, setShowEditModal]     = useState(false);
 
+  /* ── load ── */
   const load = useCallback(async () => {
     const supabase = createClient();
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
 
     if (user) {
       const { data: staffData } = await supabase
@@ -52,7 +51,6 @@ function AppointmentsContent() {
         .select('clinic_id')
         .eq('auth_user_id', user.id)
         .single();
-
       setClinicId(staffData?.clinic_id ?? null);
     }
 
@@ -67,7 +65,7 @@ function AppointmentsContent() {
     sun.setDate(mon.getDate() + 6);
 
     const weekStart = mon.toISOString().split('T')[0];
-    const weekEnd = sun.toISOString().split('T')[0];
+    const weekEnd   = sun.toISOString().split('T')[0];
 
     let query = supabase
       .from('appointments')
@@ -75,10 +73,10 @@ function AppointmentsContent() {
       .gte('appointment_date', weekStart)
       .lte('appointment_date', weekEnd)
       .order('appointment_date', { ascending: true })
-      .order('appointment_time', { ascending: true });
+      .order('appointment_time',  { ascending: true });
 
     if (filterDentist) query = query.eq('dentist_id', filterDentist);
-    if (filterStatus) query = query.eq('status', filterStatus);
+    if (filterStatus)  query = query.eq('status', filterStatus);
 
     const [apptRes, dentistRes] = await Promise.all([
       query,
@@ -90,9 +88,7 @@ function AppointmentsContent() {
     setLoading(false);
   }, [filterDentist, filterStatus]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     const id = searchParams.get('id');
@@ -105,6 +101,30 @@ function AppointmentsContent() {
     }
   }, [searchParams, appointments]);
 
+  /* ── reschedule (drag-drop) ── */
+  const handleReschedule = useCallback(
+    async (apptId: string, newDate: string, newTime: string) => {
+      const supabase = createClient();
+
+      const { error } = await supabase
+        .from('appointments')
+        .update({ appointment_date: newDate, appointment_time: newTime })
+        .eq('id', apptId);
+
+      if (error) {
+        toast.error('Failed to reschedule appointment. Please try again.');
+        throw error; // tells WeeklyCalendar to roll back optimistic update
+      }
+
+      toast.success('Appointment rescheduled successfully.');
+
+      // Silently re-fetch so parent state stays in sync (no loading flash)
+      load();
+    },
+    [load, toast],
+  );
+
+  /* ── modal helpers ── */
   function openDetail(appt: Appointment) {
     setSelectedAppt(appt);
     setShowDetailModal(true);
@@ -128,9 +148,7 @@ function AppointmentsContent() {
           >
             <option value="">All Dentists</option>
             {dentists.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
+              <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
 
@@ -141,9 +159,7 @@ function AppointmentsContent() {
           >
             <option value="">All Statuses</option>
             {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
+              <option key={s} value={s}>{s}</option>
             ))}
           </select>
 
@@ -151,10 +167,7 @@ function AppointmentsContent() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setFilterDentist('');
-                setFilterStatus('');
-              }}
+              onClick={() => { setFilterDentist(''); setFilterStatus(''); }}
             >
               Clear filters
             </Button>
@@ -173,23 +186,18 @@ function AppointmentsContent() {
         appointments={appointments}
         loading={loading}
         onSelectAppointment={openDetail}
+        onReschedule={handleReschedule}
       />
 
       <Modal
         open={showDetailModal}
-        onClose={() => {
-          setShowDetailModal(false);
-          setSelectedAppt(null);
-        }}
+        onClose={() => { setShowDetailModal(false); setSelectedAppt(null); }}
         title="Appointment Details"
       >
         {selectedAppt && (
           <AppointmentCard
             appointment={selectedAppt}
-            onUpdated={() => {
-              load();
-              setShowDetailModal(false);
-            }}
+            onUpdated={() => { load(); setShowDetailModal(false); }}
             onEdit={() => openEdit(selectedAppt)}
             toast={toast}
           />
@@ -198,10 +206,7 @@ function AppointmentsContent() {
 
       <Modal
         open={showEditModal}
-        onClose={() => {
-          setShowEditModal(false);
-          setEditingAppt(null);
-        }}
+        onClose={() => { setShowEditModal(false); setEditingAppt(null); }}
         title="Edit Appointment"
       >
         {editingAppt && clinicId && (
@@ -209,15 +214,8 @@ function AppointmentsContent() {
             clinicId={clinicId}
             existing={editingAppt}
             toast={toast}
-            onSuccess={() => {
-              load();
-              setShowEditModal(false);
-              setEditingAppt(null);
-            }}
-            onCancel={() => {
-              setShowEditModal(false);
-              setEditingAppt(null);
-            }}
+            onSuccess={() => { load(); setShowEditModal(false); setEditingAppt(null); }}
+            onCancel={() => { setShowEditModal(false); setEditingAppt(null); }}
           />
         )}
       </Modal>
