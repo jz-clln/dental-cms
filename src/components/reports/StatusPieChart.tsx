@@ -6,12 +6,13 @@ import {
 } from 'recharts';
 import { AppointmentStatusCount } from '@/types';
 
-const STATUS_CHART_COLORS: Record<string, string> = {
-  Scheduled:  '#3b82f6',
-  Confirmed:  '#0f766e',
-  Done:       '#22c55e',
-  'No-show':  '#ef4444',
-  Cancelled:  '#94a3b8',
+// Cohesive muted palette — no loud primaries
+const STATUS_COLORS: Record<string, string> = {
+  Scheduled:  '#378ADD', // blue-400
+  Confirmed:  '#1D9E75', // teal-400
+  Done:       '#639922', // green-400
+  'No-show':  '#E24B4A', // red-400
+  Cancelled:  '#888780', // gray-400
 };
 
 interface StatusPieChartProps {
@@ -22,23 +23,25 @@ function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const { name, value } = payload[0];
   return (
-    <div className="bg-white border border-gray-100 shadow-lg rounded-xl px-4 py-3">
-      <p className="text-xs text-gray-400 mb-1">{name}</p>
-      <p className="text-sm font-bold text-gray-900">{value} appointment{value !== 1 ? 's' : ''}</p>
+    <div className="bg-white border border-gray-200 rounded-lg px-3 py-2.5">
+      <p className="text-[11px] text-gray-400 mb-0.5">{name}</p>
+      <p className="text-sm font-semibold text-gray-900">
+        {value} appointment{value !== 1 ? 's' : ''}
+      </p>
     </div>
   );
 }
 
 function CustomLegend({ payload }: any) {
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-2 justify-center mt-3">
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5 justify-center mt-2">
       {(payload ?? []).map((entry: any) => (
         <div key={entry.value} className="flex items-center gap-1.5">
           <div
-            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+            className="w-2 h-2 rounded-full flex-shrink-0"
             style={{ backgroundColor: entry.color }}
           />
-          <span className="text-xs text-gray-500">{entry.value}</span>
+          <span className="text-[11px] text-gray-400">{entry.value}</span>
         </div>
       ))}
     </div>
@@ -48,40 +51,47 @@ function CustomLegend({ payload }: any) {
 export function StatusPieChart({ data }: StatusPieChartProps) {
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-56 text-gray-300 text-sm">
+      <div className="flex items-center justify-center h-56 text-sm text-gray-300">
         No appointment data this month.
       </div>
     );
   }
 
-  const chartData = data.map(d => ({
-    name: d.status,
-    value: d.count,
-  }));
+  const chartData = data.map(d => ({ name: d.status, value: d.count }));
+  const total = chartData.reduce((s, d) => s + d.value, 0);
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <PieChart>
-        <Pie
-          data={chartData}
-          cx="50%"
-          cy="45%"
-          innerRadius={55}
-          outerRadius={85}
-          paddingAngle={3}
-          dataKey="value"
-        >
-          {chartData.map((entry, index) => (
-            <Cell
-              key={`cell-${index}`}
-              fill={STATUS_CHART_COLORS[entry.name] ?? '#94a3b8'}
-              stroke="none"
-            />
-          ))}
-        </Pie>
-        <Tooltip content={<CustomTooltip />} />
-        <Legend content={<CustomLegend />} />
-      </PieChart>
-    </ResponsiveContainer>
+    <div className="relative">
+      <ResponsiveContainer width="100%" height={210}>
+        <PieChart>
+          <Pie
+            data={chartData}
+            cx="50%"
+            cy="46%"
+            innerRadius={58}
+            outerRadius={82}
+            paddingAngle={2}
+            dataKey="value"
+            strokeWidth={0}
+          >
+            {chartData.map((entry, i) => (
+              <Cell
+                key={`cell-${i}`}
+                fill={STATUS_COLORS[entry.name] ?? '#888780'}
+                stroke="none"
+              />
+            ))}
+          </Pie>
+          <Tooltip content={<CustomTooltip />} />
+          <Legend content={<CustomLegend />} />
+        </PieChart>
+      </ResponsiveContainer>
+
+      {/* Center label */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center pb-6 pointer-events-none">
+        <p className="text-2xl font-semibold text-gray-900">{total}</p>
+        <p className="text-[11px] text-gray-400 mt-0.5">total</p>
+      </div>
+    </div>
   );
 }
