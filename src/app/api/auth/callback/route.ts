@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const cookieStore = await cookies();
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
       } = await supabase.auth.getUser();
 
       if (user) {
+        // ⚠️ use maybeSingle to avoid throwing when no row exists
         const { data: existing } = await supabase
           .from('staff')
           .select('id')
@@ -43,16 +45,12 @@ export async function GET(request: NextRequest) {
           .maybeSingle();
 
         if (!existing) {
-          await supabase.from('staff').insert({
-            clinic_id: 'a1b2c3d4-0000-0000-0000-000000000001',
-            auth_user_id: user.id,
-            email: user.email,
-            full_name: user.user_metadata?.full_name ?? user.email,
-            role: 'front_desk',
-          });
+          // ✅ New user → go to onboarding
+          return NextResponse.redirect(`${origin}/onboarding`);
         }
       }
 
+      // ✅ Existing user → go to dashboard (or next param)
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
