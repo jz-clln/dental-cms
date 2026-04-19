@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useClinicId } from '@/lib/hooks/useClinicId';
 import { useToast } from '@/lib/hooks/useToast';
 import Link from 'next/link';
@@ -21,66 +21,100 @@ interface Stats {
   revenueThisWeek: number;
 }
 
+interface DashboardState {
+  stats: Stats;
+  appointments: Appointment[];
+  activity: ActivityItem[];
+  loading: boolean;
+}
+
+const INITIAL_STATE: DashboardState = {
+  stats: { todaysAppointments: 0, totalPatients: 0, lowStockAlerts: 0, revenueThisWeek: 0 },
+  appointments: [],
+  activity: [],
+  loading: true,
+};
+
+// Cache so revisiting the page feels instant
+const cache = { data: null as Omit<DashboardState, 'loading'> | null, ts: 0 };
+const CACHE_TTL = 60_000; // 1 minute
+
+function getWeekRange() {
+  const now = new Date();
+  const day = now.getDay();
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const mon = new Date(now);
+  mon.setDate(now.getDate() + diffToMon);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  return {
+    weekStart: mon.toISOString().split('T')[0],
+    weekEnd: sun.toISOString().split('T')[0],
+  };
+}
+
 export default function DashboardPage() {
   const { clinicId, loading: clinicLoading } = useClinicId();
   const { toast } = useToast();
-  const [stats, setStats] = useState<Stats>({
-    todaysAppointments: 0, totalPatients: 0,
-    lowStockAlerts: 0, revenueThisWeek: 0,
-  });
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<DashboardState>(INITIAL_STATE);
+  const loadingRef = useRef(false); // prevent concurrent fetches
 
-  useEffect(() => {
-    if (clinicLoading) return;
-    loadDashboard();
-  }, [clinicId]);
+  const loadDashboard = useCallback(async (silent = false) => {
+    if (!clinicId || loadingRef.current) return;
 
-  useEffect(() => {
-    const handleFocus = () => loadDashboard();
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [clinicId]);
+    // Serve from cache if fresh
+    if (silent && cache.data && Date.now() - cache.ts < CACHE_TTL) {
+      setState(s => ({ ...s, ...cache.data }));
+      return;
+    }
 
-  async function loadDashboard() {
-    if (!clinicId) return;
+    loadingRef.current = true;
+    if (!silent) setState(s => ({ ...s, loading: true }));
+
     try {
       const supabase = createClient();
       const today = getTodayString();
-
-      const now = new Date();
-      const day = now.getDay();
-      const diffToMon = day === 0 ? -6 : 1 - day;
-      const mon = new Date(now); mon.setDate(now.getDate() + diffToMon);
-      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-      const weekStart = mon.toISOString().split('T')[0];
-      const weekEnd = sun.toISOString().split('T')[0];
+      const { weekStart, weekEnd } = getWeekRange();
 
       const [
-        apptToday, apptFull, patients, inventory, payments,
-        recentAppts, recentPatients, recentPayments,
+        apptToday, apptFull, patients, inventory,
+        payments, recentAppts, recentPatients, recentPayments,
       ] = await Promise.all([
-        supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('clinic_id', clinicId).eq('appointment_date', today),
-        supabase.from('appointments').select('*, patient:patients(*), dentist:dentists(*)').eq('clinic_id', clinicId).eq('appointment_date', today).order('appointment_time'),
-        supabase.from('patients').select('id', { count: 'exact', head: true }).eq('clinic_id', clinicId),
-        supabase.from('inventory_items').select('id, quantity, reorder_level').eq('clinic_id', clinicId),
-        supabase.from('payments').select('amount_paid').eq('clinic_id', clinicId).gte('payment_date', weekStart).lte('payment_date', weekEnd),
-        supabase.from('appointments').select('*, patient:patients(first_name, last_name)').eq('clinic_id', clinicId).order('created_at', { ascending: false }).limit(5),
-        supabase.from('patients').select('*').eq('clinic_id', clinicId).order('created_at', { ascending: false }).limit(3),
-        supabase.from('payments').select('*, patient:patients(first_name, last_name)').eq('clinic_id', clinicId).order('created_at', { ascending: false }).limit(3),
+        supabase.from('appointments')
+          .select('id', { count: 'exact', head: true })
+          .eq('clinic_id', clinicId).eq('appointment_date', today),
+        supabase.from('appointments')
+          .select('*, patient:patients(*), dentist:dentists(*)')
+          .eq('clinic_id', clinicId).eq('appointment_date', today)
+          .order('appointment_time'),
+        supabase.from('patients')
+          .select('id', { count: 'exact', head: true })
+          .eq('clinic_id', clinicId),
+        supabase.from('inventory_items')
+          .select('id, quantity, reorder_level')
+          .eq('clinic_id', clinicId),
+        supabase.from('payments')
+          .select('amount_paid')
+          .eq('clinic_id', clinicId)
+          .gte('payment_date', weekStart).lte('payment_date', weekEnd),
+        supabase.from('appointments')
+          .select('id, created_at, treatment_type, patient:patients(first_name, last_name)')
+          .eq('clinic_id', clinicId)
+          .order('created_at', { ascending: false }).limit(5),
+        supabase.from('patients')
+          .select('id, created_at, first_name, last_name')
+          .eq('clinic_id', clinicId)
+          .order('created_at', { ascending: false }).limit(3),
+        supabase.from('payments')
+          .select('id, created_at, amount_paid, patient:patients(first_name, last_name)')
+          .eq('clinic_id', clinicId)
+          .order('created_at', { ascending: false }).limit(3),
       ]);
 
-      const lowStock = (inventory.data ?? []).filter(i => i.quantity <= i.reorder_level).length;
-      const revenue = (payments.data ?? []).reduce((sum, p) => sum + (p.amount_paid ?? 0), 0);
-
-      setStats({
-        todaysAppointments: apptToday.count ?? 0,
-        totalPatients: patients.count ?? 0,
-        lowStockAlerts: lowStock,
-        revenueThisWeek: revenue,
-      });
-      setAppointments((apptFull.data ?? []) as Appointment[]);
+      const lowStock = (inventory.data ?? [])
+        .filter(i => i.quantity <= i.reorder_level).length;
+      const revenue = (payments.data ?? [])
+        .reduce((sum, p) => sum + (p.amount_paid ?? 0), 0);
 
       const items: ActivityItem[] = [];
       (recentAppts.data ?? []).forEach(a => items.push({
@@ -99,15 +133,53 @@ export default function DashboardPage() {
         timestamp: p.created_at,
       }));
       items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setActivity(items.slice(0, 8));
+
+      const next = {
+        stats: {
+          todaysAppointments: apptToday.count ?? 0,
+          totalPatients: patients.count ?? 0,
+          lowStockAlerts: lowStock,
+          revenueThisWeek: revenue,
+        },
+        appointments: (apptFull.data ?? []) as Appointment[],
+        activity: items.slice(0, 8),
+      };
+
+      // Write cache
+      cache.data = next;
+      cache.ts = Date.now();
+
+      // Single setState = single re-render
+      setState({ ...next, loading: false });
     } catch (error) {
       console.error('Dashboard load error:', error);
-      toast.error('Failed to load dashboard data');
+      if (!silent) toast.error('Failed to load dashboard data');
+      setState(s => ({ ...s, loading: false }));
     } finally {
-      setLoading(false);
+      loadingRef.current = false;
     }
-  }
+  }, [clinicId]);
 
+  // Initial load
+  useEffect(() => {
+    if (!clinicLoading) loadDashboard();
+  }, [clinicId, clinicLoading, loadDashboard]);
+
+  // Refocus refresh — debounced, silent (no toast, uses cache)
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const onFocus = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => loadDashboard(true), 300);
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearTimeout(timer);
+    };
+  }, [loadDashboard]);
+
+  const { stats, appointments, activity, loading } = state;
   const hasLowStock = stats.lowStockAlerts > 0;
 
   return (
@@ -194,8 +266,6 @@ export default function DashboardPage() {
 
       {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-
-        {/* Today's Appointments */}
         <div className="lg:col-span-3 border border-gray-200 rounded-xl overflow-hidden bg-white">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -210,7 +280,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Activity Feed */}
         <div className="lg:col-span-2 border border-gray-200 rounded-xl overflow-hidden bg-white">
           <div className="px-4 py-3 border-b border-gray-100">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -221,7 +290,6 @@ export default function DashboardPage() {
             <ActivityFeed items={activity} loading={loading} />
           </div>
         </div>
-
       </div>
     </div>
   );
