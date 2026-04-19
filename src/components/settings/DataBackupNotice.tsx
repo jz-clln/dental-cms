@@ -10,7 +10,7 @@ export function DataBackupNotice() {
         </div>
         <div>
           <p className="font-semibold text-green-900">Your data is safe and backed up</p>
-          <p className="text-xs text-green-700 mt-0.5">Powered by Supabase — enterprise-grade infrastructure</p>
+          <p className="text-xs text-green-700 mt-0.5">Powered by Supabase</p>
         </div>
       </div>
 
@@ -40,7 +40,7 @@ export function DataBackupNotice() {
       </div>
 
       <p className="text-xs text-green-700">
-        Patient records are never deleted — archiving keeps them safe but hidden. All data is encrypted at rest and in transit.
+        Patient records are never deleted. Archiving keeps them safe but hidden. All data is encrypted at rest and in transit.
       </p>
     </div>
   );
