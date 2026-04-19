@@ -320,6 +320,15 @@ export function WeeklyCalendar({
                           draggable={!!onReschedule}
                           onDragStart={onReschedule ? (e) => handleDragStart(e, appt) : undefined}
                           onDragEnd={onReschedule ? handleDragEnd : undefined}
+                          // Distinguish click vs drag: track pointer-down time
+                          onPointerDown={() => { (appt as any).__pointerDownAt = Date.now(); }}
+                          onClick={() => {
+                            const delta = Date.now() - ((appt as any).__pointerDownAt ?? 0);
+                            if (delta < 300) onSelectAppointment(appt);
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => e.key === 'Enter' && onSelectAppointment(appt)}
                           className={cn(
                             'group relative w-full text-left p-2 rounded-lg border text-xs transition-all select-none',
                             SLOT_COLORS[appt.status] ?? SLOT_COLORS.Scheduled,
@@ -333,11 +342,8 @@ export function WeeklyCalendar({
                             <GripVertical className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 opacity-0 group-hover:opacity-30 transition-opacity" />
                           )}
 
-                          {/* Click target — whole card minus drag area */}
-                          <button
-                            className="w-full text-left"
-                            onClick={() => !isDragging && onSelectAppointment(appt)}
-                          >
+                          {/* Card content — no nested interactive elements */}
+                          <div className="w-full">
                             <p className="font-semibold leading-tight truncate pr-3">
                               {getPatientName(appt.patient)}
                             </p>
@@ -347,7 +353,7 @@ export function WeeklyCalendar({
                             <p className="mt-0.5 opacity-60 truncate text-[10px]">
                               {appt.treatment_type}
                             </p>
-                          </button>
+                          </div>
 
                           {/* Saving spinner overlay */}
                           {isSaving && (
