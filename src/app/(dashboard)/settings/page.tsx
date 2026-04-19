@@ -8,20 +8,19 @@ import { ClinicInfoForm } from '@/components/settings/ClinicInfoForm';
 import { DentistsPanel } from '@/components/settings/DentistsPanel';
 import { StaffPanel } from '@/components/settings/StaffPanel';
 import { ChangePasswordForm } from '@/components/settings/ChangePasswordForm';
+import { DataBackupNotice } from '@/components/settings/DataBackupNotice';
 import { useAppToast } from '@/app/(dashboard)/layout';
 import { SkeletonCard } from '@/components/ui/Skeleton';
-import {
-  Building2, Users, Stethoscope, Lock,
-} from 'lucide-react';
+import { Building2, Users, Stethoscope, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type Tab = 'clinic' | 'dentists' | 'staff' | 'password';
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: 'clinic',    label: 'Clinic Info',  icon: Building2 },
-  { id: 'dentists',  label: 'Dentists',     icon: Stethoscope },
-  { id: 'staff',     label: 'Staff',        icon: Users },
-  { id: 'password',  label: 'Password',     icon: Lock },
+  { id: 'clinic',   label: 'Clinic Info', icon: Building2 },
+  { id: 'dentists', label: 'Dentists',    icon: Stethoscope },
+  { id: 'staff',    label: 'Staff',       icon: Users },
+  { id: 'password', label: 'Password',    icon: Lock },
 ];
 
 export default function SettingsPage() {
@@ -63,7 +62,6 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
-
       {/* Tab navigation */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-1.5 flex gap-1 overflow-x-auto">
         {TABS.map(tab => (
@@ -83,28 +81,32 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {/* Tab content */}
       {loading ? (
         <SkeletonCard />
       ) : (
         <>
           {/* Clinic Info */}
           {activeTab === 'clinic' && clinic && (
-            <Card>
-              <CardHeader>
-                <h3 className="font-semibold text-gray-900">Clinic Information</h3>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  This information appears on receipts and documents.
-                </p>
-              </CardHeader>
-              <CardBody>
-                <ClinicInfoForm
-                  clinic={clinic}
-                  onSuccess={updated => setClinic(updated)}
-                  toast={toast}
-                />
-              </CardBody>
-            </Card>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <h3 className="font-semibold text-gray-900">Clinic Information</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    This information appears on receipts and documents.
+                  </p>
+                </CardHeader>
+                <CardBody>
+                  <ClinicInfoForm
+                    clinic={clinic}
+                    onSuccess={updated => setClinic(updated)}
+                    toast={toast}
+                  />
+                </CardBody>
+              </Card>
+
+              {/* Data backup notice — always visible on Clinic tab */}
+              <DataBackupNotice />
+            </div>
           )}
 
           {/* Dentists */}
