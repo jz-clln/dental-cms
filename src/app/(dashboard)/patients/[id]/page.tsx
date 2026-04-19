@@ -8,9 +8,9 @@ import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Input';
-import VisitNoteCard from '@/components/patients/VisitNoteCard';
+import { TreatmentTimeline } from '@/components/patients/TreatmentTimeline';
 import { PatientForm } from '@/components/patients/PatientForm';
-import { Modal, ConfirmModal } from '@/components/ui/Modal';
+import { Modal } from '@/components/ui/Modal';
 import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
 import { useAppToast } from '@/app/(dashboard)/layout';
 import {
@@ -19,7 +19,7 @@ import {
 } from '@/lib/utils';
 import {
   ArrowLeft, User, Phone, Mail, MapPin, Calendar,
-  FileText, Receipt, Plus, Pencil, CalendarPlus,
+  Clock, Plus, Pencil, CalendarPlus,
 } from 'lucide-react';
 
 export default function PatientProfilePage() {
@@ -28,23 +28,20 @@ export default function PatientProfilePage() {
   const toast = useAppToast();
 
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [visitNotes, setVisitNotes] = useState<VisitNote[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [billing, setBilling] = useState<Billing[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [clinicId, setClinicId] = useState<string | null>(null);
 
-  // UI state
   const [showEditModal, setShowEditModal] = useState(false);
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [noteError, setNoteError] = useState('');
+  const [timelineKey, setTimelineKey] = useState(0); // force timeline reload
 
-  useEffect(() => {
-    loadAll();
-  }, [id]);
+  useEffect(() => { loadAll(); }, [id]);
 
   async function loadAll() {
     setLoading(true);
@@ -59,12 +56,8 @@ export default function PatientProfilePage() {
 
     const today = new Date().toISOString().split('T')[0];
 
-    const [patientRes, notesRes, apptRes, billRes, payRes] = await Promise.all([
+    const [patientRes, apptRes, billRes, payRes] = await Promise.all([
       supabase.from('patients').select('*').eq('id', id).single(),
-      supabase.from('visit_notes')
-        .select('*, appointment:appointments(treatment_type)')
-        .eq('patient_id', id)
-        .order('created_at', { ascending: false }),
       supabase.from('appointments')
         .select('*, dentist:dentists(name)')
         .eq('patient_id', id)
@@ -82,7 +75,6 @@ export default function PatientProfilePage() {
     }
 
     setPatient(patientRes.data as Patient);
-    setVisitNotes((notesRes.data ?? []) as VisitNote[]);
     setAppointments((apptRes.data ?? []) as Appointment[]);
     setBilling((billRes.data ?? []) as Billing[]);
     setPayments((payRes.data ?? []) as Payment[]);
@@ -90,10 +82,7 @@ export default function PatientProfilePage() {
   }
 
   async function handleAddNote() {
-    if (!newNote.trim()) {
-      setNoteError('Please write a note before saving.');
-      return;
-    }
+    if (!newNote.trim()) { setNoteError('Please write a note before saving.'); return; }
     setSavingNote(true);
     const supabase = createClient();
     const { error } = await supabase.from('visit_notes').insert({
@@ -108,12 +97,11 @@ export default function PatientProfilePage() {
       setNewNote('');
       setNoteError('');
       setShowNoteInput(false);
-      loadAll();
+      setTimelineKey(k => k + 1); // re-render timeline
     }
     setSavingNote(false);
   }
 
-  // Billing summary
   const totalCharged = billing.reduce((s, b) => s + (b.amount_charged ?? 0), 0);
   const totalPaid = payments.reduce((s, p) => s + (p.amount_paid ?? 0), 0);
   const balance = totalCharged - totalPaid;
@@ -125,7 +113,7 @@ export default function PatientProfilePage() {
         <div className="h-8 w-32 bg-gray-100 animate-pulse rounded-lg" />
         <SkeletonCard />
         <SkeletonCard />
-        <SkeletonTable rows={3} />
+        <SkeletonTable rows={4} />
       </div>
     );
   }
@@ -139,11 +127,10 @@ export default function PatientProfilePage() {
 
       {/* Back */}
       <Button variant="ghost" size="sm" onClick={() => router.push('/patients')} className="text-gray-500">
-        <ArrowLeft className="w-4 h-4" />
-        All Patients
+        <ArrowLeft className="w-4 h-4" /> All Patients
       </Button>
 
-      {/* Header card */}
+      {/* Patient header */}
       <Card>
         <CardBody className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-teal-100 flex items-center justify-center flex-shrink-0">
@@ -176,19 +163,14 @@ export default function PatientProfilePage() {
               )}
             </div>
             {patient.birthday && (
-              <p className="text-xs text-gray-400 mt-1">
-                Birthday: {formatDate(patient.birthday)}
-              </p>
+              <p className="text-xs text-gray-400 mt-1">Birthday: {formatDate(patient.birthday)}</p>
             )}
           </div>
           <div className="flex gap-2 flex-shrink-0">
             <Button variant="secondary" size="sm" onClick={() => setShowEditModal(true)}>
               <Pencil className="w-3.5 h-3.5" /> Edit
             </Button>
-            <Button
-              size="sm"
-              onClick={() => router.push(`/appointments/new?patient_id=${patient.id}`)}
-            >
+            <Button size="sm" onClick={() => router.push(`/appointments/new?patient_id=${patient.id}`)}>
               <CalendarPlus className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">New Appt</span>
             </Button>
@@ -196,47 +178,15 @@ export default function PatientProfilePage() {
         </CardBody>
       </Card>
 
-      {/* Billing Summary */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-gray-400" /> Billing Summary
-            </h3>
-            <Badge label={billingStatus} />
-          </div>
-        </CardHeader>
-        <CardBody>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-xs text-gray-500">Total Billed</p>
-              <p className="text-lg font-bold text-gray-900 mt-0.5">{formatPeso(totalCharged)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Total Paid</p>
-              <p className="text-lg font-bold text-green-600 mt-0.5">{formatPeso(totalPaid)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Balance</p>
-              <p className={`text-lg font-bold mt-0.5 ${balance > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                {formatPeso(balance)}
-              </p>
-            </div>
-          </div>
-        </CardBody>
-      </Card>
-
       {/* Upcoming Appointments */}
-      <Card>
-        <CardHeader>
-          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-400" /> Upcoming Appointments
-          </h3>
-        </CardHeader>
-        <CardBody className="py-2">
-          {appointments.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No upcoming appointments.</p>
-          ) : (
+      {appointments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-gray-400" /> Upcoming Appointments
+            </h3>
+          </CardHeader>
+          <CardBody className="py-2">
             <div className="divide-y divide-gray-50">
               {appointments.map(appt => (
                 <div key={appt.id} className="flex items-center gap-4 py-3">
@@ -251,25 +201,26 @@ export default function PatientProfilePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900">{appt.treatment_type}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
                       {formatTime(appt.appointment_time)}
-                      {appt.dentist && ` · ${appt.dentist.name}`}
+                      {(appt as any).dentist?.name && ` · ${(appt as any).dentist.name}`}
                     </p>
                   </div>
                   <Badge label={appt.status} />
                 </div>
               ))}
             </div>
-          )}
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
+      )}
 
-      {/* Visit Notes / History */}
+      {/* Treatment History Timeline */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-gray-400" /> Visit History
+              <Clock className="w-4 h-4 text-gray-400" /> Treatment History
             </h3>
             <Button size="sm" variant="secondary" onClick={() => setShowNoteInput(v => !v)}>
               <Plus className="w-3.5 h-3.5" /> Add Note
@@ -279,7 +230,7 @@ export default function PatientProfilePage() {
         <CardBody>
           {/* Add note input */}
           {showNoteInput && (
-            <div className="mb-6 p-4 bg-teal-50 rounded-xl border border-teal-100 space-y-3">
+            <div className="mb-5 p-4 bg-teal-50 rounded-xl border border-teal-100 space-y-3">
               <p className="text-sm font-medium text-teal-800">New Visit Note</p>
               <Textarea
                 placeholder="Write treatment notes, observations, or follow-up instructions…"
@@ -289,26 +240,17 @@ export default function PatientProfilePage() {
                 rows={3}
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleAddNote} loading={savingNote}>
-                  Save Note
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => { setShowNoteInput(false); setNewNote(''); setNoteError(''); }}>
+                <Button size="sm" onClick={handleAddNote} loading={savingNote}>Save Note</Button>
+                <Button size="sm" variant="ghost" onClick={() => {
+                  setShowNoteInput(false); setNewNote(''); setNoteError('');
+                }}>
                   Cancel
                 </Button>
               </div>
             </div>
           )}
 
-          {/* Notes timeline */}
-          {visitNotes.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No visit notes yet.</p>
-          ) : (
-            <div>
-              {visitNotes.map(note => (
-                <VisitNoteCard key={note.id} note={note} />
-              ))}
-            </div>
-          )}
+          <TreatmentTimeline key={timelineKey} patientId={id} />
         </CardBody>
       </Card>
 
@@ -319,10 +261,7 @@ export default function PatientProfilePage() {
             clinicId={clinicId}
             existing={patient}
             toast={toast}
-            onSuccess={(updated) => {
-              setPatient(updated);
-              setShowEditModal(false);
-            }}
+            onSuccess={(updated) => { setPatient(updated); setShowEditModal(false); }}
             onCancel={() => setShowEditModal(false)}
           />
         )}

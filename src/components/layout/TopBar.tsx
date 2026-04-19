@@ -4,17 +4,18 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { GlobalSearch } from '@/components/layout/GlobalSearch';
+import { NotificationsBell } from '@/components/layout/NotificationsBell';
 import { usePrintSchedule } from '@/lib/hooks/usePrintSchedule';
 import { Printer } from 'lucide-react';
 
 const PAGE_TITLES: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/patients': 'Patients',
+  '/dashboard':    'Dashboard',
+  '/patients':     'Patients',
   '/appointments': 'Appointments',
-  '/inventory': 'Inventory',
-  '/billing': 'Billing',
-  '/reports': 'Reports',
-  '/settings': 'Settings',
+  '/inventory':    'Inventory',
+  '/billing':      'Billing',
+  '/reports':      'Reports',
+  '/settings':     'Settings',
 };
 
 function getTitle(pathname: string): string {
@@ -62,10 +63,10 @@ export function TopBar() {
     <header className="bg-white border-b border-gray-100 px-4 md:px-6 py-3.5 flex items-center
       justify-between sticky top-0 z-20 gap-3">
 
-      {/* Left: title */}
+      {/* Left: page title */}
       <h1 className="text-lg font-semibold text-gray-900 ml-10 md:ml-0 flex-shrink-0">{title}</h1>
 
-      {/* Right: search + actions + avatar */}
+      {/* Right: search + print + bell + avatar */}
       <div className="flex items-center gap-2">
 
         {/* Global search */}
@@ -86,14 +87,13 @@ export function TopBar() {
           </button>
         )}
 
+        {/* Live notifications bell */}
+        <NotificationsBell />
+
         {/* User avatar */}
         <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
           {avatarUrl ? (
-            <img
-              src={avatarUrl}
-              alt="Profile"
-              className="w-full h-full object-cover"
-            />
+            <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-teal-700 flex items-center justify-center">
               <span className="text-white text-xs font-semibold">{initials}</span>
