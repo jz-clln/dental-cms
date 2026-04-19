@@ -61,7 +61,7 @@ export default function BillingPage() {
     // Build per-patient summaries (only patients with any billing activity)
     const billed = new Set(billing.map(b => b.patient_id));
     const paid = new Set(payments.map(p => p.patient_id));
-    const patientIds = new Set([...billed, ...paid]);
+    const patientIds = new Set(Array.from(billed).concat(Array.from(paid)));
 
     const built: PatientBillingSummary[] = [];
     for (const pid of patientIds) {
