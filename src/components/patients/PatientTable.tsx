@@ -8,8 +8,9 @@ import { calculateAge, formatDateShort, getPatientName } from '@/lib/utils';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/Modal';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
-  Search, ChevronUp, ChevronDown, UserX,
+  Search, ChevronUp, ChevronDown,
   UserPlus, Archive, ArchiveRestore, Eye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -116,6 +117,7 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
 
   return (
     <div className="space-y-4">
+
       {/* Toolbar */}
       <div className="flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap gap-2 items-center">
@@ -174,7 +176,7 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
 
-        {/* Desktop table */}
+        {/* ── Desktop table ───────────────────────────────── */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -201,15 +203,38 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
             <tbody className="divide-y divide-gray-50">
               {sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-14">
-                    <UserX className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                    <p className="text-gray-400 text-sm">
-                      {search
-                        ? 'No patients match your search.'
-                        : showArchived
-                          ? 'No archived patients.'
-                          : 'No patients yet.'}
-                    </p>
+                  <td colSpan={5}>
+                    {/* No patients at all — show full illustrated empty state */}
+                    {!search && !showArchived && (
+                      <EmptyState type="patients" />
+                    )}
+
+                    {/* Search returned nothing */}
+                    {search && (
+                      <EmptyState
+                        type="generic"
+                        title="No patients found"
+                        description={`No patients match "${search}". Try a different name, phone number, or ID.`}
+                      />
+                    )}
+
+                    {/* Archived tab is empty */}
+                    {showArchived && !search && (
+                      <EmptyState
+                        type="generic"
+                        title="No archived patients"
+                        description="Patients you archive will appear here. Their records are always preserved."
+                      />
+                    )}
+
+                    {/* Searching within archived */}
+                    {showArchived && search && (
+                      <EmptyState
+                        type="generic"
+                        title="No archived patients found"
+                        description={`No archived patients match "${search}".`}
+                      />
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -273,15 +298,36 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
           </table>
         </div>
 
-        {/* Mobile */}
+        {/* ── Mobile card list ────────────────────────────── */}
         <div className="md:hidden divide-y divide-gray-50">
           {sorted.length === 0 ? (
-            <div className="text-center py-14">
-              <UserX className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">
-                {search ? 'No patients match your search.' : 'No patients yet.'}
-              </p>
-            </div>
+            <>
+              {!search && !showArchived && <EmptyState type="patients" />}
+
+              {search && (
+                <EmptyState
+                  type="generic"
+                  title="No patients found"
+                  description={`No patients match "${search}".`}
+                />
+              )}
+
+              {showArchived && !search && (
+                <EmptyState
+                  type="generic"
+                  title="No archived patients"
+                  description="Patients you archive will appear here."
+                />
+              )}
+
+              {showArchived && search && (
+                <EmptyState
+                  type="generic"
+                  title="No archived patients found"
+                  description={`No archived patients match "${search}".`}
+                />
+              )}
+            </>
           ) : (
             sorted.map(patient => {
               const isArchived = (patient as any).archived === true;
@@ -298,7 +344,8 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 truncate">{getPatientName(patient)}</p>
                     <p className="text-xs text-gray-500">
-                      {calculateAge(patient.birthday) !== null ? `${calculateAge(patient.birthday)} yrs` : ''}
+                      {calculateAge(patient.birthday) !== null
+                        ? `${calculateAge(patient.birthday)} yrs` : ''}
                       {patient.contact_number ? ` · ${patient.contact_number}` : ''}
                     </p>
                   </div>
@@ -322,11 +369,14 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
           )}
         </div>
 
+        {/* Footer count */}
         {sorted.length > 0 && (
           <div className="px-5 py-3 border-t border-gray-50 bg-gray-50">
             <p className="text-xs text-gray-400">
               Showing {sorted.length} of {patients.filter(p =>
-                showArchived ? (p as any).archived === true : (p as any).archived !== true
+                showArchived
+                  ? (p as any).archived === true
+                  : (p as any).archived !== true
               ).length} patient{sorted.length !== 1 ? 's' : ''}
             </p>
           </div>
