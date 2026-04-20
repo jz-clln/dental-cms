@@ -9,6 +9,7 @@ import { DentistsPanel } from '@/components/settings/DentistsPanel';
 import { StaffPanel } from '@/components/settings/StaffPanel';
 import { ChangePasswordForm } from '@/components/settings/ChangePasswordForm';
 import { DataBackupNotice } from '@/components/settings/DataBackupNotice';
+import { LogoUpload } from '@/components/settings/LogoUpload';
 import { useAppToast } from '@/app/(dashboard)/layout';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { Building2, Users, Stethoscope, Lock } from 'lucide-react';
@@ -62,6 +63,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
+
       {/* Tab navigation */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-1.5 flex gap-1 overflow-x-auto">
         {TABS.map(tab => (
@@ -85,9 +87,30 @@ export default function SettingsPage() {
         <SkeletonCard />
       ) : (
         <>
-          {/* Clinic Info */}
-          {activeTab === 'clinic' && clinic && (
+          {/* Clinic Info tab */}
+          {activeTab === 'clinic' && clinic && clinicId && (
             <div className="space-y-4">
+
+              {/* Logo upload */}
+              <Card>
+                <CardHeader>
+                  <h3 className="font-semibold text-gray-900">Clinic Logo</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Your logo appears in the sidebar, login page, and printed schedules.
+                  </p>
+                </CardHeader>
+                <CardBody>
+                  <LogoUpload
+                    clinicId={clinicId}
+                    currentLogoUrl={(clinic as any).logo_url ?? null}
+                    clinicName={clinic.name}
+                    onUpdated={url => setClinic(prev => prev ? { ...prev, logo_url: url } as any : prev)}
+                    toast={toast}
+                  />
+                </CardBody>
+              </Card>
+
+              {/* Clinic info form */}
               <Card>
                 <CardHeader>
                   <h3 className="font-semibold text-gray-900">Clinic Information</h3>
@@ -104,7 +127,7 @@ export default function SettingsPage() {
                 </CardBody>
               </Card>
 
-              {/* Data backup notice — always visible on Clinic tab */}
+              {/* Data backup notice */}
               <DataBackupNotice />
             </div>
           )}

@@ -1,13 +1,12 @@
 'use client';
 
-import { Sidebar } from '@/components/layout/Sidebar';
+import { Sidebar, BottomNav } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
-import { BottomNav } from '@/components/layout/Sidebar';
 import { ToastContainer } from '@/components/ui/Toast';
+import { SplashScreen } from '@/components/ui/SplashScreen';
 import { useToast } from '@/lib/hooks/useToast';
 import { createContext, useContext } from 'react';
 
-// Toast context so any child page can trigger toasts
 type ToastFn = {
   success: (msg: string) => void;
   error: (msg: string) => void;
@@ -29,11 +28,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <ToastContext.Provider value={toast}>
-      <div className="flex h-screen overflow-hidden bg-gray-50">
-        {/* Sidebar (desktop) */}
-        <Sidebar />
+      {/* Splash screen — auto-dismisses after 1.2s */}
+      <SplashScreen />
 
-        {/* Main content area */}
+      <div className="flex h-screen overflow-hidden bg-gray-50">
+        <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <TopBar />
           <main className="flex-1 overflow-y-auto pb-20 md:pb-6">
@@ -44,10 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </div>
 
-      {/* Mobile bottom nav */}
       <BottomNav />
-
-      {/* Toast notifications */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </ToastContext.Provider>
   );
