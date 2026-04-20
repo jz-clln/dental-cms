@@ -20,7 +20,7 @@ import {
 } from '@/lib/utils';
 import {
   ArrowLeft, User, Phone, Mail, MapPin, Calendar,
-  Clock, Plus, Pencil, CalendarPlus, Tooth,
+  Clock, Plus, Pencil, CalendarPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
