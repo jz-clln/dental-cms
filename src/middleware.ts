@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 // Pages that don't require authentication
@@ -15,11 +15,22 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(
+          cookiesToSet: {
+            name: string;
+            value: string;
+            options?: CookieOptions;
+          }[]
+        ) {
+          // Set cookies on the request
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
+
+          // Create new response to attach cookies
           supabaseResponse = NextResponse.next({ request });
+
+          // Set cookies on the response
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -29,14 +40,20 @@ export async function middleware(request: NextRequest) {
   );
 
   // Refresh session
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route + '/'));
+  const isPublicRoute = PUBLIC_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(route + '/')
+  );
 
   // Root redirect
   if (pathname === '/') {
-    return NextResponse.redirect(new URL(user ? '/dashboard' : '/login', request.url));
+    return NextResponse.redirect(
+      new URL(user ? '/dashboard' : '/login', request.url)
+    );
   }
 
   // Not logged in — send to login
