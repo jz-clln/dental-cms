@@ -330,8 +330,8 @@ export default function SignupPage() {
         <div className="mt-4 bg-white/60 border border-gray-100 rounded-xl px-5 py-3.5 flex items-center gap-3">
           <div className="text-2xl">🦷</div>
           <div>
-            <p className="text-xs font-semibold text-gray-700">Free forever — no credit card needed</p>
-            <p className="text-xs text-gray-400">50 patients, full features. Upgrade anytime.</p>
+            <p className="text-xs font-semibold text-gray-700">No Credit Card Required</p>
+            <p className="text-xs text-gray-400">50 patients, Full features. Upgrade anytime.</p>
           </div>
         </div>
 
