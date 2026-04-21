@@ -1,5 +1,18 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
+  "/api/auth/callback/route": "app/api/auth/callback/route.js",
   "/login/page": "app/login/page.js",
-  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js"
+  "/onboarding/page": "app/onboarding/page.js",
+  "/page": "app/page.js",
+  "/signup/page": "app/signup/page.js",
+  "/(dashboard)/appointments/new/page": "app/(dashboard)/appointments/new/page.js",
+  "/(dashboard)/appointments/page": "app/(dashboard)/appointments/page.js",
+  "/(dashboard)/patients/[id]/page": "app/(dashboard)/patients/[id]/page.js",
+  "/(dashboard)/billing/page": "app/(dashboard)/billing/page.js",
+  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
+  "/(dashboard)/patients/page": "app/(dashboard)/patients/page.js",
+  "/(dashboard)/reports/page": "app/(dashboard)/reports/page.js",
+  "/(dashboard)/settings/page": "app/(dashboard)/settings/page.js",
+  "/(dashboard)/inventory/page": "app/(dashboard)/inventory/page.js",
+  "/(dashboard)/patients/new/page": "app/(dashboard)/patients/new/page.js"
 }
