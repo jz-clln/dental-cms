@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 
@@ -8,14 +8,23 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/dashboard';
 
   if (code) {
-    const cookieStore = await cookies();
+    const cookieStore = cookies();
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() { return cookieStore.getAll(); },
-          setAll(cookiesToSet) {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(
+            cookiesToSet: {
+              name: string;
+              value: string;
+              options?: CookieOptions;
+            }[]
+          ) {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             );
@@ -27,8 +36,10 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Check if this user already has a staff / clinic record
-      const { data: { user } } = await supabase.auth.getUser();
+      // Get authenticated user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
       if (user) {
         const { data: staff } = await supabase
@@ -37,16 +48,18 @@ export async function GET(request: NextRequest) {
           .eq('auth_user_id', user.id)
           .single();
 
+        // New user → onboarding
         if (!staff || !staff.clinic_id) {
-          // Brand new user — send to onboarding
           return NextResponse.redirect(`${origin}/onboarding`);
         }
       }
 
-      // Existing user — go to dashboard (or next param)
+      // Existing user → dashboard or intended page
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
 
-  return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
+  return NextResponse.redirect(
+    `${origin}/login?error=auth_callback_failed`
+  );
 }
