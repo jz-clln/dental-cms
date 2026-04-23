@@ -1,31 +1,51 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { AppIcon } from '@/components/ui/ToothLogo';
-import { Loader2, Mail, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Mail, ArrowLeft, RefreshCw } from 'lucide-react';
 
-type Step = 'form' | 'sent';
+type Step = 'form' | 'verify';
 
 export default function SignupPage() {
+  const router = useRouter();
   const [step, setStep] = useState<Step>('form');
+
+  // Form state
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // OTP state
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [verifying, setVerifying] = useState(false);
+  const [otpError, setOtpError] = useState('');
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // ── Validation ─────────────────────────────────────────────
   function validate(): boolean {
     const e: Record<string, string> = {};
     if (!fullName.trim()) e.fullName = 'Full name is required.';
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       e.email = 'Enter a valid email address.';
     }
+    if (password.length < 8) e.password = 'Password must be at least 8 characters.';
+    if (password !== confirmPassword) e.confirmPassword = 'Passwords do not match.';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
+  // ── Sign up ────────────────────────────────────────────────
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
@@ -33,23 +53,19 @@ export default function SignupPage() {
 
     const supabase = createClient();
 
-    // signInWithOtp with shouldCreateUser: true = creates account if not exists
-    const { error } = await supabase.auth.signInWithOtp({
+    // signUp with email OTP — Supabase sends a 6-digit code
+    const { error } = await supabase.auth.signUp({
       email: email.trim(),
+      password,
       options: {
-        shouldCreateUser: true,
-        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-        data: {
-          full_name: fullName.trim(),
-        },
+        data: { full_name: fullName.trim() },
+        // No emailRedirectTo here — we use OTP verification instead
       },
     });
 
     if (error) {
       if (error.message.toLowerCase().includes('already registered')) {
-        setErrors({
-          email: 'This email already has an account. Sign in instead.',
-        });
+        setErrors({ email: 'This email is already registered. Try signing in instead.' });
       } else {
         setErrors({ general: error.message });
       }
@@ -57,10 +73,109 @@ export default function SignupPage() {
       return;
     }
 
-    setStep('sent');
     setLoading(false);
+    setStep('verify');
   }
 
+  // ── OTP input handlers ─────────────────────────────────────
+  function handleOtpChange(index: number, value: string) {
+    // Only allow digits
+    const digit = value.replace(/\D/g, '').slice(-1);
+    const newOtp = [...otp];
+    newOtp[index] = digit;
+    setOtp(newOtp);
+    setOtpError('');
+
+    // Auto-advance to next input
+    if (digit && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  }
+
+  function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
+    if (e.key === 'Backspace') {
+      if (otp[index]) {
+        // Clear current
+        const newOtp = [...otp];
+        newOtp[index] = '';
+        setOtp(newOtp);
+      } else if (index > 0) {
+        // Move back
+        inputRefs.current[index - 1]?.focus();
+      }
+    }
+    if (e.key === 'ArrowLeft' && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+    if (e.key === 'ArrowRight' && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  }
+
+  function handleOtpPaste(e: React.ClipboardEvent) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      setOtp(pasted.split(''));
+      inputRefs.current[5]?.focus();
+    }
+  }
+
+  // ── Verify OTP ─────────────────────────────────────────────
+  async function handleVerify() {
+    const code = otp.join('');
+    if (code.length < 6) {
+      setOtpError('Please enter the full 6-digit code.');
+      return;
+    }
+
+    setVerifying(true);
+    setOtpError('');
+    const supabase = createClient();
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: code,
+      type: 'signup',
+    });
+
+    if (error) {
+      setOtpError(
+        error.message.toLowerCase().includes('expired')
+          ? 'Code expired. Click "Resend code" to get a new one.'
+          : error.message.toLowerCase().includes('invalid')
+            ? 'Incorrect code. Double-check and try again.'
+            : 'Verification failed. Please try again.'
+      );
+      setOtp(['', '', '', '', '', '']);
+      inputRefs.current[0]?.focus();
+      setVerifying(false);
+      return;
+    }
+
+    // Verified — go to onboarding
+    router.push('/onboarding');
+  }
+
+  // ── Resend OTP ─────────────────────────────────────────────
+  async function handleResend() {
+    setResending(true);
+    setOtpError('');
+    const supabase = createClient();
+
+    await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+    });
+
+    setResent(true);
+    setOtp(['', '', '', '', '', '']);
+    inputRefs.current[0]?.focus();
+    setResending(false);
+    setTimeout(() => setResent(false), 4000);
+  }
+
+  // ── Google signup ──────────────────────────────────────────
   async function handleGoogleSignup() {
     setGoogleLoading(true);
     const supabase = createClient();
@@ -70,67 +185,105 @@ export default function SignupPage() {
     });
   }
 
-  // ── Email sent screen ──────────────────────────────────────
-  if (step === 'sent') {
+  // ══════════════════════════════════════════════════════════
+  // OTP VERIFICATION SCREEN
+  // ══════════════════════════════════════════════════════════
+  if (step === 'verify') {
+    const isComplete = otp.every(d => d !== '');
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-gray-50 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center space-y-5">
 
-            {/* Icon */}
-            <div className="flex justify-center">
-              <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center">
-                <Mail className="w-8 h-8 text-teal-700" />
-              </div>
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-4">
+              <AppIcon size="lg" />
             </div>
+            <h1 className="text-2xl font-bold text-gray-900">Check your email</h1>
+            <p className="text-gray-500 text-sm mt-2">
+              We sent a 6-digit code to
+            </p>
+            <p className="font-semibold text-gray-800 text-sm mt-0.5">{email}</p>
+          </div>
 
-            {/* Message */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-6">
+
+            {/* Code input */}
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Almost there, {fullName.split(' ')[0]}!</h2>
-              <p className="text-gray-500 text-sm mt-2">
-                We sent a magic link to{' '}
-                <span className="font-semibold text-gray-800">{email}</span>.
-                Click it to create your account — no password needed.
+              <p className="text-sm font-medium text-gray-700 text-center mb-4">
+                Enter your verification code
               </p>
+              <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
+                {otp.map((digit, i) => (
+                  <input
+                    key={i}
+                    ref={el => { inputRefs.current[i] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={e => handleOtpChange(i, e.target.value)}
+                    onKeyDown={e => handleOtpKeyDown(i, e)}
+                    className={`w-12 h-14 text-center text-xl font-bold rounded-xl border-2
+                      focus:outline-none focus:border-teal-500 transition-all
+                      ${digit ? 'border-teal-400 bg-teal-50 text-teal-700' : 'border-gray-200 bg-white text-gray-900'}
+                      ${otpError ? 'border-red-300 bg-red-50' : ''}
+                    `}
+                    autoFocus={i === 0}
+                  />
+                ))}
+              </div>
+              {otpError && (
+                <p className="text-xs text-red-600 text-center mt-3">{otpError}</p>
+              )}
+              {resent && (
+                <p className="text-xs text-green-600 text-center mt-3 font-medium">
+                  ✓ New code sent to your email
+                </p>
+              )}
             </div>
 
-            {/* Steps */}
-            <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 text-left space-y-2.5">
-              {[
-                'Open the email from Dental CMS',
-                'Click the "Activate my account" link',
-                'Set up your clinic (takes 30 seconds)',
-                'You\'re in — start managing your clinic',
-              ].map((s, i) => (
-                <div key={i} className="flex items-start gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-teal-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-teal-800 text-xs font-bold">{i + 1}</span>
-                  </div>
-                  <p className="text-sm text-teal-800">{s}</p>
-                </div>
-              ))}
-            </div>
+            {/* Verify button */}
+            <button
+              onClick={handleVerify}
+              disabled={verifying || !isComplete}
+              className="w-full flex items-center justify-center gap-2 bg-teal-700 hover:bg-teal-800
+                text-white font-semibold py-2.5 rounded-xl transition-colors
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {verifying && <Loader2 className="w-4 h-4 animate-spin" />}
+              {verifying ? 'Verifying…' : 'Verify & Continue'}
+            </button>
 
-            <div className="space-y-1.5 text-xs text-gray-400">
-              <p>The link expires in 1 hour.</p>
-              <p>Check your spam folder if you don't see it.</p>
-            </div>
-
-            <div className="flex flex-col gap-2">
+            {/* Resend + Back */}
+            <div className="flex items-center justify-between pt-1">
               <button
-                onClick={() => { setStep('form'); setErrors({}); }}
-                className="flex items-center justify-center gap-2 text-sm text-teal-700 font-medium hover:underline"
+                onClick={() => { setStep('form'); setOtp(['','','','','','']); setOtpError(''); }}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                Use a different email
+                <ArrowLeft className="w-3 h-3" /> Use different email
               </button>
               <button
-                onClick={handleSignup}
-                disabled={loading}
-                className="text-sm text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                onClick={handleResend}
+                disabled={resending}
+                className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700
+                  font-medium transition-colors disabled:opacity-50"
               >
-                {loading ? 'Sending…' : 'Resend the link'}
+                {resending
+                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Sending…</>
+                  : <><RefreshCw className="w-3 h-3" /> Resend code</>
+                }
               </button>
+            </div>
+
+            {/* Help text */}
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <p className="text-xs text-gray-500 font-medium mb-1.5">Didn't get the code?</p>
+              <ul className="text-xs text-gray-400 space-y-1">
+                <li>· Check your spam or junk folder</li>
+                <li>· The code expires in 10 minutes</li>
+                <li>· Make sure you typed the right email</li>
+              </ul>
             </div>
           </div>
         </div>
@@ -138,7 +291,9 @@ export default function SignupPage() {
     );
   }
 
-  // ── Signup form ────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  // SIGNUP FORM
+  // ══════════════════════════════════════════════════════════
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -150,7 +305,7 @@ export default function SignupPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Create your account</h1>
           <p className="text-gray-500 text-sm mt-1">
-            No password needed. We'll send a magic link to your email.
+            Start managing your clinic in minutes. Free forever.
           </p>
         </div>
 
@@ -164,8 +319,7 @@ export default function SignupPage() {
             disabled={googleLoading}
             className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-lg
               border border-gray-200 bg-white text-gray-700 text-sm font-medium
-              hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2
-              focus:ring-gray-300 disabled:opacity-60 mb-5"
+              hover:bg-gray-50 transition-colors mb-5 disabled:opacity-60"
           >
             {googleLoading
               ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
@@ -191,7 +345,6 @@ export default function SignupPage() {
             </div>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSignup} className="space-y-4">
 
             {errors.general && (
@@ -202,20 +355,16 @@ export default function SignupPage() {
 
             {/* Full name */}
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="fullName" className="text-sm font-medium text-gray-700">
-                Your Full Name
-              </label>
+              <label className="text-sm font-medium text-gray-700">Full Name</label>
               <input
-                id="fullName"
                 type="text"
                 autoComplete="name"
                 required
                 value={fullName}
                 onChange={e => { setFullName(e.target.value); setErrors(p => ({ ...p, fullName: '' })); }}
                 placeholder="Dr. Juan Dela Cruz"
-                className={`w-full px-3.5 py-2.5 rounded-lg border text-sm text-gray-900
-                  placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500
-                  focus:border-transparent transition-colors
+                className={`w-full px-3.5 py-2.5 rounded-lg border text-sm placeholder:text-gray-400
+                  focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors
                   ${errors.fullName ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
               />
               {errors.fullName && <p className="text-xs text-red-600">{errors.fullName}</p>}
@@ -223,47 +372,84 @@ export default function SignupPage() {
 
             {/* Email */}
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="email" className="text-sm font-medium text-gray-700">
-                Email Address
-              </label>
+              <label className="text-sm font-medium text-gray-700">Email Address</label>
+              <input
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={e => { setEmail(e.target.value); setErrors(p => ({ ...p, email: '' })); }}
+                placeholder="you@clinic.com"
+                className={`w-full px-3.5 py-2.5 rounded-lg border text-sm placeholder:text-gray-400
+                  focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors
+                  ${errors.email ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
+              />
+              {errors.email && <p className="text-xs text-red-600">{errors.email}</p>}
+            </div>
+
+            {/* Password */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">Password</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   required
-                  value={email}
-                  onChange={e => { setEmail(e.target.value); setErrors(p => ({ ...p, email: '' })); }}
-                  placeholder="you@clinic.com"
-                  className={`w-full pl-9 pr-4 py-2.5 rounded-lg border text-sm text-gray-900
-                    placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500
-                    focus:border-transparent transition-colors
-                    ${errors.email ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
+                  value={password}
+                  onChange={e => { setPassword(e.target.value); setErrors(p => ({ ...p, password: '' })); }}
+                  placeholder="Min. 8 characters"
+                  className={`w-full px-3.5 py-2.5 pr-11 rounded-lg border text-sm placeholder:text-gray-400
+                    focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors
+                    ${errors.password ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
                 />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
-              {errors.email && (
-                <p className="text-xs text-red-600">
-                  {errors.email}
-                  {errors.email.includes('Sign in') && (
-                    <Link href="/login" className="font-semibold underline ml-1">Sign in here →</Link>
-                  )}
-                </p>
+              {errors.password && <p className="text-xs text-red-600">{errors.password}</p>}
+              {password.length > 0 && (
+                <div className="flex items-center gap-1 mt-1">
+                  {[1,2,3,4].map(i => (
+                    <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                      password.length >= i * 3
+                        ? password.length < 6 ? 'bg-red-400' : password.length < 10 ? 'bg-amber-400' : 'bg-green-400'
+                        : 'bg-gray-100'
+                    }`} />
+                  ))}
+                  <span className="text-xs text-gray-400 ml-1 flex-shrink-0">
+                    {password.length < 6 ? 'Weak' : password.length < 10 ? 'Good' : 'Strong'}
+                  </span>
+                </div>
               )}
             </div>
 
-            {/* What happens callout */}
-            <div className="flex items-start gap-2.5 bg-gray-50 border border-gray-100 rounded-xl p-3.5">
-              <Mail className="w-4 h-4 text-teal-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-gray-500 leading-relaxed">
-                We'll send a magic link to this email. Click it to instantly activate your account.
-                <span className="font-medium text-gray-700"> No password required, ever.</span>
-              </p>
+            {/* Confirm password */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">Confirm Password</label>
+              <div className="relative">
+                <input
+                  type={showConfirm ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  required
+                  value={confirmPassword}
+                  onChange={e => { setConfirmPassword(e.target.value); setErrors(p => ({ ...p, confirmPassword: '' })); }}
+                  placeholder="Repeat your password"
+                  className={`w-full px-3.5 py-2.5 pr-11 rounded-lg border text-sm placeholder:text-gray-400
+                    focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors
+                    ${errors.confirmPassword ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
+                />
+                <button type="button" onClick={() => setShowConfirm(!showConfirm)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {errors.confirmPassword && <p className="text-xs text-red-600">{errors.confirmPassword}</p>}
             </div>
 
             {/* Terms */}
             <p className="text-xs text-gray-400 leading-relaxed">
-              By signing up you agree to our{' '}
+              By creating an account you agree to our{' '}
               <span className="text-teal-600 hover:underline cursor-pointer">Terms of Service</span>
               {' '}and{' '}
               <span className="text-teal-600 hover:underline cursor-pointer">Privacy Policy</span>.
@@ -274,14 +460,11 @@ export default function SignupPage() {
               type="submit"
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 bg-teal-700 hover:bg-teal-800
-                text-white font-medium py-2.5 px-4 rounded-lg transition-colors
-                disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none
-                focus:ring-2 focus:ring-teal-500 focus:ring-offset-1"
+                text-white font-semibold py-2.5 rounded-lg transition-colors
+                disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loading
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending your link…</>
-                : <><Mail className="w-4 h-4" /> Send me a magic link</>
-              }
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {loading ? 'Creating account…' : 'Create Free Account'}
             </button>
           </form>
 
@@ -294,18 +477,16 @@ export default function SignupPage() {
           </p>
         </div>
 
-        {/* Free plan callout */}
+        {/* Free callout */}
         <div className="mt-4 bg-white/60 border border-gray-100 rounded-xl px-5 py-3.5 flex items-center gap-3">
-          <CheckCircle className="w-4 h-4 text-teal-500 flex-shrink-0" />
+          <div className="text-2xl">🦷</div>
           <div>
             <p className="text-xs font-semibold text-gray-700">Free forever — no credit card needed</p>
             <p className="text-xs text-gray-400">50 patients, full features. Upgrade anytime.</p>
           </div>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-4">
-          Dental CMS · For clinic use only
-        </p>
+        <p className="text-center text-xs text-gray-400 mt-4">Dental CMS · For clinic use only</p>
       </div>
     </div>
   );
