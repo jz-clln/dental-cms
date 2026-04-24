@@ -6,12 +6,10 @@ import { createClient } from '@/lib/supabase/client';
 import { AppIcon } from '@/components/ui/ToothLogo';
 import { Loader2, Building2, Phone, Mail, MapPin, CheckCircle } from 'lucide-react';
 
-type OnboardingStep = 'clinic' | 'done';
-
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState<OnboardingStep>('clinic');
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState({
@@ -49,7 +47,7 @@ export default function OnboardingPage() {
       return;
     }
 
-    // Check if staff record already exists (Google OAuth users)
+    // Check if they already have a clinic (shouldn't happen but be safe)
     const { data: existingStaff } = await supabase
       .from('staff')
       .select('id, clinic_id')
@@ -57,7 +55,6 @@ export default function OnboardingPage() {
       .single();
 
     if (existingStaff?.clinic_id) {
-      // Already has a clinic — go to dashboard
       router.push('/dashboard');
       return;
     }
@@ -75,17 +72,18 @@ export default function OnboardingPage() {
       .single();
 
     if (clinicError || !clinic) {
-      setErrors({ general: 'Failed to create clinic. Please try again.' });
+      setErrors({ general: 'Failed to create your clinic. Please try again.' });
       setLoading(false);
       return;
     }
 
     // Create staff record as admin
+    const fullName = user.user_metadata?.full_name ?? user.email ?? 'Admin';
     const { error: staffError } = await supabase.from('staff').insert({
       clinic_id: clinic.id,
       auth_user_id: user.id,
-      email: user.email ?? form.email.trim(),
-      full_name: user.user_metadata?.full_name ?? user.email ?? 'Admin',
+      email: user.email ?? '',
+      full_name: fullName,
       role: 'admin',
     });
 
@@ -95,33 +93,34 @@ export default function OnboardingPage() {
       return;
     }
 
-    setStep('done');
+    setDone(true);
     setLoading(false);
 
-    // Redirect after short delay
-    setTimeout(() => router.push('/dashboard'), 2000);
+    // Redirect to their unique dashboard
+    setTimeout(() => {
+      router.push('/dashboard');
+    }, 1800);
   }
 
-  // ── Done screen ────────────────────────────────────────────
-  if (step === 'done') {
+  // ── Success state ──────────────────────────────────────────
+  if (done) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-gray-50
+        flex items-center justify-center p-4">
         <div className="text-center space-y-5 max-w-sm">
           <div className="flex justify-center">
-            <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center
-              animate-in zoom-in-50 duration-500">
+            <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
               <CheckCircle className="w-10 h-10 text-green-600" />
             </div>
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">You're all set!</h2>
-            <p className="text-gray-500 mt-2">
-              <strong>{form.clinicName}</strong> is ready. Taking you to your dashboard…
+            <h2 className="text-2xl font-bold text-gray-900">You're all set! 🦷</h2>
+            <p className="text-gray-500 mt-2 text-sm">
+              <strong className="text-gray-800">{form.clinicName}</strong> is ready.
+              Taking you to your dashboard…
             </p>
           </div>
-          <div className="flex justify-center">
-            <Loader2 className="w-5 h-5 text-teal-600 animate-spin" />
-          </div>
+          <Loader2 className="w-5 h-5 text-teal-600 animate-spin mx-auto" />
         </div>
       </div>
     );
@@ -129,7 +128,8 @@ export default function OnboardingPage() {
 
   // ── Clinic setup form ──────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-gray-50
+      flex items-center justify-center p-4">
       <div className="w-full max-w-md">
 
         {/* Header */}
@@ -139,17 +139,10 @@ export default function OnboardingPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Set up your clinic</h1>
           <p className="text-gray-500 text-sm mt-1">
-            This takes 30 seconds. You can update it anytime in Settings.
+            Takes 30 seconds. You can update everything later in Settings.
           </p>
         </div>
 
-        {/* Progress indicator */}
-        <div className="flex items-center gap-2 mb-6">
-          <div className="flex-1 h-1.5 rounded-full bg-teal-600" />
-          <span className="text-xs text-gray-400 flex-shrink-0">Step 1 of 1</span>
-        </div>
-
-        {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
 
@@ -159,23 +152,25 @@ export default function OnboardingPage() {
               </div>
             )}
 
-            {/* Clinic Name — required */}
+            {/* Clinic name */}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
                 Clinic Name <span className="text-red-400">*</span>
               </label>
               <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   required
                   value={form.clinicName}
                   onChange={e => set('clinicName', e.target.value)}
                   placeholder="Bright Smile Dental Clinic"
-                  className={`w-full pl-9 pr-4 py-2.5 rounded-lg border text-sm text-gray-900
+                  className={`w-full pl-10 pr-4 py-2.5 rounded-lg border text-sm text-gray-900
                     placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500
                     focus:border-transparent transition-colors
-                    ${errors.clinicName ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
+                    ${errors.clinicName
+                      ? 'border-red-300 bg-red-50'
+                      : 'border-gray-200 hover:border-gray-300'}`}
                 />
               </div>
               {errors.clinicName && <p className="text-xs text-red-600">{errors.clinicName}</p>}
@@ -184,16 +179,16 @@ export default function OnboardingPage() {
             {/* Address */}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
-                Address <span className="text-gray-400 font-normal">(optional)</span>
+                Address <span className="text-gray-400 text-xs font-normal">(optional)</span>
               </label>
               <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   value={form.address}
                   onChange={e => set('address', e.target.value)}
                   placeholder="Street, City, Province"
-                  className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm
                     text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2
                     focus:ring-teal-500 hover:border-gray-300 transition-colors"
                 />
@@ -204,7 +199,7 @@ export default function OnboardingPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700">
-                  Phone <span className="text-gray-400 font-normal text-xs">(optional)</span>
+                  Phone <span className="text-gray-400 text-xs font-normal">(optional)</span>
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -221,7 +216,7 @@ export default function OnboardingPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700">
-                  Email <span className="text-gray-400 font-normal text-xs">(optional)</span>
+                  Email <span className="text-gray-400 text-xs font-normal">(optional)</span>
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -233,7 +228,7 @@ export default function OnboardingPage() {
                     className={`w-full pl-9 pr-3 py-2.5 rounded-lg border text-sm text-gray-900
                       placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500
                       hover:border-gray-300 transition-colors
-                      ${errors.email ? 'border-red-300' : 'border-gray-200'}`}
+                      ${errors.email ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
                   />
                 </div>
                 {errors.email && <p className="text-xs text-red-600">{errors.email}</p>}
@@ -245,18 +240,20 @@ export default function OnboardingPage() {
               type="submit"
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 bg-teal-700 hover:bg-teal-800
-                text-white font-semibold py-2.5 px-4 rounded-lg transition-colors mt-2
+                text-white font-semibold py-3 px-4 rounded-xl transition-colors mt-2
                 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2
                 focus:ring-teal-500 focus:ring-offset-1"
             >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {loading ? 'Setting up your clinic…' : 'Create My Clinic →'}
+              {loading
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating your clinic…</>
+                : 'Create My Clinic & Go to Dashboard →'
+              }
             </button>
           </form>
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-4">
-          Your data is private and never shared.
+          Your data is private. No other clinic can see it.
         </p>
       </div>
     </div>
