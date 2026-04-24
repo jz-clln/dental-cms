@@ -5,69 +5,65 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { AppIcon } from '@/components/ui/ToothLogo';
-import { Eye, EyeOff, Loader2, Mail } from 'lucide-react';
+import { Loader2, Mail, ArrowRight } from 'lucide-react';
 
 export default function SignupPage() {
   const router = useRouter();
+
+  // Step 1: collect name + email
+  // Step 2: code sent, waiting for input
+  const [step, setStep] = useState<'form' | 'sent'>('form');
+
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function validate(): boolean {
     const e: Record<string, string> = {};
-    if (!fullName.trim()) e.fullName = 'Full name is required.';
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      e.email = 'Enter a valid email address.';
+    if (!fullName.trim()) e.fullName = 'Please enter your full name.';
+    if (!email.trim()) e.email = 'Please enter your email address.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      e.email = 'Enter a valid email address (e.g. you@gmail.com).';
     }
-    if (password.length < 8) e.password = 'Password must be at least 8 characters.';
-    if (password !== confirmPassword) e.confirmPassword = 'Passwords do not match.';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
-  async function handleSignup(e: React.FormEvent) {
+  async function handleSendCode(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
+    setErrors({});
 
     const supabase = createClient();
 
-    // Sign up the user — Supabase sends OTP automatically
-    // because we configured OTP in the email template
-    const { error } = await supabase.auth.signUp({
+    // signInWithOtp sends a real 6-digit code to the exact email entered
+    // shouldCreateUser: true means it creates an account if one doesn't exist
+    const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      password,
       options: {
+        shouldCreateUser: true,
         data: {
           full_name: fullName.trim(),
         },
-        // No emailRedirectTo — we use OTP verification instead
       },
     });
 
     if (error) {
-      if (error.message.toLowerCase().includes('already registered')) {
-        setErrors({ email: 'This email is already registered. Try signing in instead.' });
-      } else {
-        setErrors({ general: error.message });
-      }
+      setErrors({ general: error.message });
       setLoading(false);
       return;
     }
 
-    // Store email and name in sessionStorage so verify page can use it
+    // Save to sessionStorage so verify page can use it
     sessionStorage.setItem('otp_email', email.trim());
     sessionStorage.setItem('otp_full_name', fullName.trim());
-    sessionStorage.setItem('otp_password', password);
 
-    // Redirect to verify page
-    router.push('/verify');
+    // Go to verify page
+    router.push('/verify?type=signup');
+    setLoading(false);
   }
 
   async function handleGoogleSignup() {
@@ -92,7 +88,7 @@ export default function SignupPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Create your account</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Start managing your clinic. Free forever.
+            We'll send a 6-digit code to your email to verify it.
           </p>
         </div>
 
@@ -119,7 +115,7 @@ export default function SignupPage() {
                 </svg>
               )
             }
-            Sign up with Google
+            Continue with Google
           </button>
 
           {/* Divider */}
@@ -132,7 +128,8 @@ export default function SignupPage() {
             </div>
           </div>
 
-          <form onSubmit={handleSignup} className="space-y-4">
+          <form onSubmit={handleSendCode} className="space-y-4">
+
             {errors.general && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
                 {errors.general}
@@ -141,116 +138,79 @@ export default function SignupPage() {
 
             {/* Full name */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Full Name</label>
+              <label className="text-sm font-medium text-gray-700">
+                Full Name
+              </label>
               <input
                 type="text"
+                autoComplete="name"
                 required
                 value={fullName}
-                onChange={e => { setFullName(e.target.value); setErrors(p => ({ ...p, fullName: '' })); }}
+                onChange={e => {
+                  setFullName(e.target.value);
+                  setErrors(p => ({ ...p, fullName: '' }));
+                }}
                 placeholder="Dr. Juan Dela Cruz"
                 className={`w-full px-3.5 py-2.5 rounded-lg border text-sm text-gray-900
                   placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500
                   focus:border-transparent transition-colors
-                  ${errors.fullName ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
+                  ${errors.fullName
+                    ? 'border-red-300 bg-red-50'
+                    : 'border-gray-200 hover:border-gray-300'}`}
               />
-              {errors.fullName && <p className="text-xs text-red-600">{errors.fullName}</p>}
-            </div>
-
-            {/* Email */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Email Address</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={e => { setEmail(e.target.value); setErrors(p => ({ ...p, email: '' })); }}
-                placeholder="you@clinic.com"
-                className={`w-full px-3.5 py-2.5 rounded-lg border text-sm text-gray-900
-                  placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500
-                  focus:border-transparent transition-colors
-                  ${errors.email ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
-              />
-              {errors.email && <p className="text-xs text-red-600">{errors.email}</p>}
-            </div>
-
-            {/* Password */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); setErrors(p => ({ ...p, password: '' })); }}
-                  placeholder="Min. 8 characters"
-                  className={`w-full px-3.5 py-2.5 pr-11 rounded-lg border text-sm text-gray-900
-                    placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500
-                    focus:border-transparent transition-colors
-                    ${errors.password ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
-                />
-                <button type="button" onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {errors.password && <p className="text-xs text-red-600">{errors.password}</p>}
-              {password.length > 0 && (
-                <div className="flex gap-1 mt-1 items-center">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                      password.length >= i * 3
-                        ? password.length < 6 ? 'bg-red-400' : password.length < 10 ? 'bg-amber-400' : 'bg-green-400'
-                        : 'bg-gray-100'}`}
-                    />
-                  ))}
-                  <span className="text-xs text-gray-400 ml-1">
-                    {password.length < 6 ? 'Weak' : password.length < 10 ? 'Good' : 'Strong'}
-                  </span>
-                </div>
+              {errors.fullName && (
+                <p className="text-xs text-red-600">{errors.fullName}</p>
               )}
             </div>
 
-            {/* Confirm password */}
+            {/* Email — this is the email the code will be sent to */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Confirm Password</label>
+              <label className="text-sm font-medium text-gray-700">
+                Email Address
+              </label>
               <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 <input
-                  type={showConfirm ? 'text' : 'password'}
+                  type="email"
+                  autoComplete="email"
                   required
-                  value={confirmPassword}
-                  onChange={e => { setConfirmPassword(e.target.value); setErrors(p => ({ ...p, confirmPassword: '' })); }}
-                  placeholder="Repeat your password"
-                  className={`w-full px-3.5 py-2.5 pr-11 rounded-lg border text-sm text-gray-900
+                  value={email}
+                  onChange={e => {
+                    setEmail(e.target.value);
+                    setErrors(p => ({ ...p, email: '' }));
+                  }}
+                  placeholder="you@gmail.com"
+                  className={`w-full pl-10 pr-4 py-2.5 rounded-lg border text-sm text-gray-900
                     placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500
                     focus:border-transparent transition-colors
-                    ${errors.confirmPassword ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
+                    ${errors.email
+                      ? 'border-red-300 bg-red-50'
+                      : 'border-gray-200 hover:border-gray-300'}`}
                 />
-                <button type="button" onClick={() => setShowConfirm(!showConfirm)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
               </div>
-              {errors.confirmPassword && <p className="text-xs text-red-600">{errors.confirmPassword}</p>}
+              {errors.email && (
+                <p className="text-xs text-red-600">{errors.email}</p>
+              )}
+              {email && !errors.email && (
+                <p className="text-xs text-teal-600 flex items-center gap-1">
+                  <span>✓</span> We'll send the code to <strong>{email.trim()}</strong>
+                </p>
+              )}
             </div>
 
-            <p className="text-xs text-gray-400 leading-relaxed">
-              By creating an account you agree to our{' '}
-              <span className="text-teal-600 hover:underline cursor-pointer">Terms of Service</span>
-              {' '}and{' '}
-              <span className="text-teal-600 hover:underline cursor-pointer">Privacy Policy</span>.
-            </p>
-
+            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 bg-teal-700 hover:bg-teal-800
-                text-white font-medium py-2.5 px-4 rounded-lg transition-colors
+                text-white font-semibold py-2.5 px-4 rounded-xl transition-colors
                 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2
-                focus:ring-teal-500 focus:ring-offset-1"
+                focus:ring-teal-500 focus:ring-offset-1 mt-2"
             >
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending code…</> : (
-                <><Mail className="w-4 h-4" /> Create Account & Send Code</>
-              )}
+              {loading
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending code to {email.trim()}…</>
+                : <><Mail className="w-4 h-4" /> Send Verification Code <ArrowRight className="w-4 h-4" /></>
+              }
             </button>
           </form>
 
@@ -262,11 +222,12 @@ export default function SignupPage() {
           </p>
         </div>
 
-        <div className="mt-4 bg-white/60 border border-gray-100 rounded-xl px-5 py-3.5 flex items-center gap-3">
-          <div className="text-2xl">🦷</div>
+        {/* Trust line */}
+        <div className="mt-4 bg-white/70 border border-gray-100 rounded-xl px-5 py-3.5 flex items-center gap-3">
+          <span className="text-2xl">🦷</span>
           <div>
-            <p className="text-xs font-semibold text-gray-700">Free forever — no credit card needed</p>
-            <p className="text-xs text-gray-400">50 patients, full features. Upgrade anytime.</p>
+            <p className="text-xs font-semibold text-gray-700">Free — no credit card needed</p>
+            <p className="text-xs text-gray-400">50 patients included. Upgrade anytime.</p>
           </div>
         </div>
 
