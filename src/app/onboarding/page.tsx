@@ -40,10 +40,7 @@ export default function OnboardingPage() {
     setLoading(true);
 
     const supabase = createClient();
-
-    // Force refresh session to ensure cookies are hydrated
     await supabase.auth.refreshSession();
-
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -51,50 +48,27 @@ export default function OnboardingPage() {
       return;
     }
 
-    // Check if they already have a clinic (shouldn't happen but be safe)
-    const { data: existingStaff } = await supabase
-      .from('staff')
-      .select('id, clinic_id')
-      .eq('auth_user_id', user.id)
-      .maybeSingle();
+    const res = await fetch('/api/onboarding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clinicName: form.clinicName.trim(),
+        address: form.address.trim(),
+        contactNumber: form.contactNumber.trim(),
+        email: form.email.trim(),
+        fullName: user.user_metadata?.full_name ?? user.email ?? 'Admin',
+      }),
+    });
 
-    if (existingStaff?.clinic_id) {
+    const data = await res.json();
+
+    if (data.alreadyExists) {
       router.push('/dashboard');
       return;
     }
 
-    // Create the clinic
-    const { data: clinic, error: clinicError } = await supabase
-      .from('clinics')
-      .insert({
-        name: form.clinicName.trim(),
-        address: form.address.trim() || null,
-        contact_number: form.contactNumber.trim() || null,
-        email: form.email.trim() || user.email || null,
-      })
-      .select()
-      .single();
-
-    if (clinicError || !clinic) {
-      console.error('clinic error:', clinicError);
-      setErrors({ general: `Failed to create your clinic: ${clinicError?.message ?? 'unknown error'}` });
-      setLoading(false);
-      return;
-    }
-
-    // Create staff record as admin
-    const fullName = user.user_metadata?.full_name ?? user.email ?? 'Admin';
-    const { error: staffError } = await supabase.from('staff').insert({
-      clinic_id: clinic.id,
-      auth_user_id: user.id,
-      email: user.email ?? '',
-      full_name: fullName,
-      role: 'admin',
-    });
-
-    if (staffError) {
-      console.error('staff error:', staffError);
-      setErrors({ general: `Failed to set up your account: ${staffError?.message ?? 'unknown error'}` });
+    if (!res.ok || data.error) {
+      setErrors({ general: data.error ?? 'Something went wrong. Please try again.' });
       setLoading(false);
       return;
     }
