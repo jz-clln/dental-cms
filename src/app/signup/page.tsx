@@ -1,45 +1,21 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { AppIcon } from '@/components/ui/ToothLogo';
-import { Eye, EyeOff, Loader2, Mail, ArrowLeft, RefreshCw } from 'lucide-react';
-
-type Step = 'form' | 'otp';
+import { Eye, EyeOff, Loader2, Mail, CheckCircle } from 'lucide-react';
 
 export default function SignupPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>('form');
 
-  // Form state
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // OTP state
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [otpError, setOtpError] = useState('');
-  const [verifying, setVerifying] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendCountdown, setResendCountdown] = useState(0);
-  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
-
-  // Countdown for resend button
-  useEffect(() => {
-    if (resendCountdown <= 0) return;
-    const t = setTimeout(() => setResendCountdown(c => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [resendCountdown]);
-
-  // ── Form validation ─────────────────────────────────────────
+  const [sent, setSent] = useState(false);
 
   function validate(): boolean {
     const e: Record<string, string> = {};
@@ -47,13 +23,9 @@ export default function SignupPage() {
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       e.email = 'Enter a valid email address.';
     }
-    if (password.length < 8) e.password = 'Password must be at least 8 characters.';
-    if (password !== confirmPassword) e.confirmPassword = 'Passwords do not match.';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
-
-  // ── Step 1: Sign up → triggers OTP email ───────────────────
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -61,127 +33,25 @@ export default function SignupPage() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
+
+    const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      password,
       options: {
+        shouldCreateUser: true,
         data: { full_name: fullName.trim() },
+        // After clicking the link, Supabase redirects here:
+        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
       },
     });
 
     if (error) {
-      if (error.message.toLowerCase().includes('already registered')) {
-        setErrors({ email: 'This email is already registered. Try signing in instead.' });
-      } else {
-        setErrors({ general: error.message });
-      }
+      setErrors({ general: error.message });
       setLoading(false);
       return;
     }
 
     setLoading(false);
-    setStep('otp');
-    setResendCountdown(60);
-    setTimeout(() => otpRefs.current[0]?.focus(), 100);
-  }
-
-  // ── OTP box handlers ────────────────────────────────────────
-
-  function handleOtpChange(index: number, value: string) {
-    const digit = value.replace(/\D/g, '').slice(-1);
-    const newOtp = [...otp];
-    newOtp[index] = digit;
-    setOtp(newOtp);
-    setOtpError('');
-
-    // Auto-advance
-    if (digit && index < 5) {
-      otpRefs.current[index + 1]?.focus();
-    }
-
-    // Auto-submit on last digit
-    if (index === 5 && digit) {
-      const code = [...newOtp.slice(0, 5), digit].join('');
-      if (code.length === 6) verifyOtp(code);
-    }
-  }
-
-  function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
-    if (e.key === 'Backspace') {
-      if (otp[index]) {
-        const newOtp = [...otp];
-        newOtp[index] = '';
-        setOtp(newOtp);
-      } else if (index > 0) {
-        otpRefs.current[index - 1]?.focus();
-      }
-    }
-    if (e.key === 'ArrowLeft' && index > 0) otpRefs.current[index - 1]?.focus();
-    if (e.key === 'ArrowRight' && index < 5) otpRefs.current[index + 1]?.focus();
-  }
-
-  function handleOtpPaste(e: React.ClipboardEvent) {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (!pasted) return;
-    const newOtp = ['', '', '', '', '', ''];
-    pasted.split('').forEach((d, i) => { if (i < 6) newOtp[i] = d; });
-    setOtp(newOtp);
-    const lastIdx = Math.min(pasted.length - 1, 5);
-    otpRefs.current[lastIdx]?.focus();
-    if (pasted.length === 6) verifyOtp(pasted);
-  }
-
-  // ── Step 2: Verify OTP with Supabase ───────────────────────
-
-  async function verifyOtp(code: string) {
-    if (verifying) return;
-    setVerifying(true);
-    setOtpError('');
-
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: code,
-      type: 'signup',
-    });
-
-    if (error || !data.user) {
-      setOtpError(
-        error?.message?.includes('expired')
-          ? 'This code has expired. Request a new one below.'
-          : 'Incorrect code. Check your email and try again.'
-      );
-      // Clear and refocus
-      setOtp(['', '', '', '', '', '']);
-      setTimeout(() => otpRefs.current[0]?.focus(), 50);
-      setVerifying(false);
-      return;
-    }
-
-    // ✅ Verified — go to onboarding to set up their clinic
-    router.push('/onboarding');
-  }
-
-  async function handleManualSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const code = otp.join('');
-    if (code.length < 6) {
-      setOtpError('Please enter all 6 digits.');
-      return;
-    }
-    verifyOtp(code);
-  }
-
-  async function handleResend() {
-    setResendLoading(true);
-    const supabase = createClient();
-    await supabase.auth.resend({ type: 'signup', email: email.trim() });
-    setOtp(['', '', '', '', '', '']);
-    setOtpError('');
-    setResendCountdown(60);
-    setResendLoading(false);
-    setTimeout(() => otpRefs.current[0]?.focus(), 100);
+    setSent(true);
   }
 
   async function handleGoogleSignup() {
@@ -193,143 +63,50 @@ export default function SignupPage() {
     });
   }
 
-  // ── OTP Screen ─────────────────────────────────────────────
+  // ── Magic link sent screen ──────────────────────────────────
 
-  if (step === 'otp') {
+  if (sent) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-gray-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm">
-
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 rounded-2xl bg-teal-100 flex items-center justify-center">
-                <Mail className="w-8 h-8 text-teal-700" />
-              </div>
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900">Enter your code</h1>
-            <p className="text-gray-500 text-sm mt-2 leading-relaxed">
-              We sent a 6-digit code to<br />
-              <span className="font-semibold text-gray-800">{email}</span>
-            </p>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <form onSubmit={handleManualSubmit} className="space-y-6">
-
-              {/* 6 digit boxes */}
-              <div className="flex flex-col items-center gap-4">
-                <div
-                  className="flex items-center gap-2.5"
-                  onPaste={handleOtpPaste}
-                >
-                  {otp.map((digit, index) => (
-                    <input
-                      key={index}
-                      ref={el => { otpRefs.current[index] = el; }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={e => handleOtpChange(index, e.target.value)}
-                      onKeyDown={e => handleOtpKeyDown(index, e)}
-                      disabled={verifying}
-                      aria-label={`Digit ${index + 1}`}
-                      className={`
-                        text-center text-2xl font-bold rounded-xl border-2
-                        focus:outline-none transition-all duration-150
-                        disabled:opacity-60 select-none
-                        ${verifying ? 'animate-pulse' : ''}
-                        ${digit && !otpError
-                          ? 'border-teal-500 bg-teal-50 text-teal-800'
-                          : otpError
-                            ? 'border-red-300 bg-red-50 text-red-700'
-                            : 'border-gray-200 bg-gray-50 text-gray-900 focus:border-teal-500 focus:bg-white'
-                        }
-                      `}
-                      style={{ width: '3rem', height: '3.75rem' }}
-                    />
-                  ))}
-                </div>
-
-                {/* Verifying state */}
-                {verifying && (
-                  <div className="flex items-center gap-2 text-teal-600">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-sm font-medium">Verifying…</span>
-                  </div>
-                )}
-
-                {/* Error message */}
-                {otpError && !verifying && (
-                  <p className="text-sm text-red-600 text-center">{otpError}</p>
-                )}
-              </div>
-
-              {/* Submit — only shows if not auto-verified */}
-              {!verifying && (
-                <button
-                  type="submit"
-                  disabled={otp.join('').length < 6}
-                  className="w-full flex items-center justify-center gap-2 bg-teal-700
-                    hover:bg-teal-800 text-white font-semibold py-3 rounded-xl
-                    transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Verify & Continue →
-                </button>
-              )}
-
-              {/* Resend */}
-              <div className="text-center pt-1">
-                {resendCountdown > 0 ? (
-                  <p className="text-sm text-gray-400">
-                    Resend available in{' '}
-                    <span className="font-semibold text-gray-600 tabular-nums">
-                      {resendCountdown}s
-                    </span>
-                  </p>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleResend}
-                    disabled={resendLoading}
-                    className="inline-flex items-center gap-1.5 text-sm text-teal-700
-                      font-medium hover:underline disabled:opacity-50"
-                  >
-                    {resendLoading
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : <RefreshCw className="w-3.5 h-3.5" />
-                    }
-                    Resend code
-                  </button>
-                )}
-              </div>
-            </form>
-
-            {/* Back */}
-            <div className="border-t border-gray-100 mt-5 pt-4 text-center">
-              <button
-                onClick={() => {
-                  setStep('form');
-                  setOtp(['', '', '', '', '', '']);
-                  setOtpError('');
-                }}
-                className="inline-flex items-center gap-1.5 text-sm text-gray-400
-                  hover:text-gray-600 transition-colors"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" /> Use a different email
-              </button>
+        <div className="w-full max-w-sm text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="w-16 h-16 rounded-2xl bg-teal-100 flex items-center justify-center">
+              <Mail className="w-8 h-8 text-teal-700" />
             </div>
           </div>
-
-          <p className="text-center text-xs text-gray-400 mt-4">
-            Code expires in 10 minutes · Check spam if you don't see it
+          <h1 className="text-2xl font-bold text-gray-900">Check your email</h1>
+          <p className="text-gray-500 text-sm leading-relaxed">
+            We sent a magic link to{' '}
+            <span className="font-semibold text-gray-800">{email}</span>.
+            <br />
+            Click the link to complete your sign up — no password needed.
           </p>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-left space-y-2">
+            <div className="flex items-start gap-2 text-sm text-gray-600">
+              <CheckCircle className="w-4 h-4 text-teal-500 mt-0.5 shrink-0" />
+              <span>The link expires in 60 minutes.</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-gray-600">
+              <CheckCircle className="w-4 h-4 text-teal-500 mt-0.5 shrink-0" />
+              <span>Check your spam folder if you don't see it.</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-gray-600">
+              <CheckCircle className="w-4 h-4 text-teal-500 mt-0.5 shrink-0" />
+              <span>You'll land on your dashboard right after clicking.</span>
+            </div>
+          </div>
+          <button
+            onClick={() => { setSent(false); setEmail(''); setFullName(''); }}
+            className="text-sm text-teal-700 hover:underline font-medium"
+          >
+            ← Use a different email
+          </button>
         </div>
       </div>
     );
   }
 
-  // ── Signup Form ────────────────────────────────────────────
+  // ── Signup form ─────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-gray-50 flex items-center justify-center p-4">
@@ -422,68 +199,6 @@ export default function SignupPage() {
               {errors.email && <p className="text-xs text-red-600">{errors.email}</p>}
             </div>
 
-            {/* Password */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  required
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); setErrors(p => ({ ...p, password: '' })); }}
-                  placeholder="Min. 8 characters"
-                  className={`w-full px-3.5 py-2.5 pr-11 rounded-lg border text-sm text-gray-900
-                    placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500
-                    focus:border-transparent transition-colors
-                    ${errors.password ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
-                />
-                <button type="button" onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {errors.password && <p className="text-xs text-red-600">{errors.password}</p>}
-              {password.length > 0 && (
-                <div className="flex items-center gap-1 mt-1">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                      password.length >= i * 3
-                        ? password.length < 6 ? 'bg-red-400' : password.length < 10 ? 'bg-amber-400' : 'bg-green-400'
-                        : 'bg-gray-100'
-                    }`} />
-                  ))}
-                  <span className="text-xs text-gray-400 ml-1 flex-shrink-0">
-                    {password.length < 6 ? 'Weak' : password.length < 10 ? 'Good' : 'Strong'}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Confirm password */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Confirm Password</label>
-              <div className="relative">
-                <input
-                  type={showConfirm ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  required
-                  value={confirmPassword}
-                  onChange={e => { setConfirmPassword(e.target.value); setErrors(p => ({ ...p, confirmPassword: '' })); }}
-                  placeholder="Repeat your password"
-                  className={`w-full px-3.5 py-2.5 pr-11 rounded-lg border text-sm text-gray-900
-                    placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500
-                    focus:border-transparent transition-colors
-                    ${errors.confirmPassword ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
-                />
-                <button type="button" onClick={() => setShowConfirm(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {errors.confirmPassword && <p className="text-xs text-red-600">{errors.confirmPassword}</p>}
-            </div>
-
             <p className="text-xs text-gray-400">
               By signing up you agree to our{' '}
               <span className="text-teal-600 hover:underline cursor-pointer">Terms of Service</span>
@@ -499,7 +214,7 @@ export default function SignupPage() {
                 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {loading ? 'Sending verification code…' : 'Create Account'}
+              {loading ? 'Sending magic link…' : 'Create Account →'}
             </button>
           </form>
 
