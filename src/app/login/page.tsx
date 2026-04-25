@@ -1,20 +1,30 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { AppIcon } from '@/components/ui/ToothLogo';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (searchParams.get('error') === 'no_account') {
+      setError('No account found for that Google login. Please sign up first.');
+    }
+    if (searchParams.get('error') === 'auth_callback_failed') {
+      setError('Something went wrong. Please try again.');
+    }
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -31,15 +41,12 @@ export default function LoginPage() {
       setError(
         authError.message === 'Invalid login credentials'
           ? 'Incorrect email or password. Please try again.'
-          : authError.message.includes('Email not confirmed')
-          ? 'Please verify your email first. Check your inbox for the 6-digit code.'
           : authError.message
       );
       setLoading(false);
       return;
     }
 
-    // Check if user has a clinic set up
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: staff } = await supabase
@@ -64,7 +71,7 @@ export default function LoginPage() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`,
+        redirectTo: `${window.location.origin}/api/auth/callback?origin=login`,
       },
     });
   }
@@ -73,7 +80,6 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
 
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             <AppIcon size="lg" />
@@ -91,7 +97,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Email */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="email" className="text-sm font-medium text-gray-700">
                 Email address
@@ -110,7 +115,6 @@ export default function LoginPage() {
               />
             </div>
 
-            {/* Password */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <label htmlFor="password" className="text-sm font-medium text-gray-700">
@@ -201,5 +205,17 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-500 text-sm">Loading...</p>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }
