@@ -40,6 +40,10 @@ export default function OnboardingPage() {
     setLoading(true);
 
     const supabase = createClient();
+
+    // Force refresh session to ensure cookies are hydrated
+    await supabase.auth.refreshSession();
+
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -52,7 +56,7 @@ export default function OnboardingPage() {
       .from('staff')
       .select('id, clinic_id')
       .eq('auth_user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (existingStaff?.clinic_id) {
       router.push('/dashboard');
@@ -72,7 +76,8 @@ export default function OnboardingPage() {
       .single();
 
     if (clinicError || !clinic) {
-      setErrors({ general: 'Failed to create your clinic. Please try again.' });
+      console.error('clinic error:', clinicError);
+      setErrors({ general: `Failed to create your clinic: ${clinicError?.message ?? 'unknown error'}` });
       setLoading(false);
       return;
     }
@@ -88,7 +93,8 @@ export default function OnboardingPage() {
     });
 
     if (staffError) {
-      setErrors({ general: 'Failed to set up your account. Please try again.' });
+      console.error('staff error:', staffError);
+      setErrors({ general: `Failed to set up your account: ${staffError?.message ?? 'unknown error'}` });
       setLoading(false);
       return;
     }
@@ -96,7 +102,6 @@ export default function OnboardingPage() {
     setDone(true);
     setLoading(false);
 
-    // Redirect to their unique dashboard
     setTimeout(() => {
       router.push('/dashboard');
     }, 1800);
@@ -132,7 +137,6 @@ export default function OnboardingPage() {
       flex items-center justify-center p-4">
       <div className="w-full max-w-md">
 
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             <AppIcon size="lg" />
