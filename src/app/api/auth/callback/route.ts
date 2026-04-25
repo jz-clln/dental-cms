@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
+  const source = searchParams.get('origin'); // 'login' | 'signup' | null
 
   if (code) {
     const cookieStore = cookies();
@@ -17,13 +18,7 @@ export async function GET(request: NextRequest) {
           getAll() {
             return cookieStore.getAll();
           },
-          setAll(
-            cookiesToSet: {
-              name: string;
-              value: string;
-              options?: CookieOptions;
-            }[]
-          ) {
+          setAll(cookiesToSet: { name: string; value: string; options?: CookieOptions }[]) {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             );
@@ -44,7 +39,16 @@ export async function GET(request: NextRequest) {
           .eq('auth_user_id', user.id)
           .single();
 
-        if (!staff?.clinic_id) {
+        const hasClinic = !!staff?.clinic_id;
+
+        // Coming from login page — reject if no account exists
+        if (source === 'login' && !hasClinic) {
+          await supabase.auth.signOut();
+          return NextResponse.redirect(`${origin}/login?error=no_account`);
+        }
+
+        // Coming from signup or magic link — send to onboarding if new
+        if (!hasClinic) {
           return NextResponse.redirect(`${origin}/onboarding`);
         }
 
