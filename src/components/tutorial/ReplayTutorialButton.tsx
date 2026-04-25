@@ -185,7 +185,7 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
             : 'opacity-0 scale-[0.98] translate-y-2'
         )}
       >
-        {/* Teal progress bar — matches sidebar teal-600 */}
+        {/* Top teal progress bar */}
         <div className="h-1 bg-gray-100">
           <div
             className="h-full bg-teal-600 transition-all duration-500 ease-out"
@@ -193,15 +193,13 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
           />
         </div>
 
-        {/* Layout: left teal accent strip + content */}
+        {/* Left teal accent strip + content */}
         <div className="flex">
-          {/* Sidebar strip — nod to the teal sidebar */}
           <div className="w-1 bg-teal-600 flex-shrink-0" />
 
-          {/* Main content */}
           <div className="flex-1 min-w-0">
 
-            {/* Skip */}
+            {/* Skip button */}
             {!isLast && (
               <button
                 onClick={handleSkip}
@@ -212,10 +210,10 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
               </button>
             )}
 
-            {/* Content */}
+            {/* Body */}
             <div className="px-6 pt-6 pb-4">
 
-              {/* Icon chip — matches dashboard stat card icon style */}
+              {/* Icon chip */}
               <div className="w-9 h-9 rounded-lg bg-teal-50 flex items-center justify-center mb-5">
                 <Icon
                   className="text-teal-600"
@@ -223,7 +221,7 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
                 />
               </div>
 
-              {/* Step label — matches "TODAY'S APPOINTMENTS" uppercase label */}
+              {/* Step counter — matches dashboard "TODAY'S APPOINTMENTS" label style */}
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
                 Step {currentStep + 1} of {STEPS.length}
               </p>
@@ -238,7 +236,7 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
                 {step.description}
               </p>
 
-              {/* Tip box — teal-tinted, matches teal accent language */}
+              {/* Tip — teal-tinted */}
               {step.tip && (
                 <div className="mt-4 flex items-start gap-2 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 flex-shrink-0" />
@@ -246,7 +244,7 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
                 </div>
               )}
 
-              {/* Action link — matches "View all →" link style from dashboard */}
+              {/* Action link — matches "View all →" dashboard link style */}
               {step.action && !isLast && (
                 <button
                   onClick={handleAction}
@@ -277,7 +275,7 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
               ))}
             </div>
 
-            {/* Nav footer — matches dashboard card border-top style */}
+            {/* Footer nav */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 mt-1">
               <button
                 onClick={goPrev}
