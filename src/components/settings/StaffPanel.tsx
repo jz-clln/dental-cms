@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { Staff } from '@/types';
 import { Input, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { Trash2, Plus, ShieldCheck, UserCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { formatDateShort } from '@/lib/utils';
+import { createStaffMember, deleteStaffMember } from '@/app/actions/staffActions';
+
+// ─── Add Staff Form ───────────────────────────────────────────
 
 interface AddStaffFormProps {
   clinicId: string;
@@ -56,23 +57,25 @@ function AddStaffForm({ clinicId, onSuccess, onCancel, toast }: AddStaffFormProp
     if (!validate()) return;
     setLoading(true);
 
-    const supabase = createClient();
-
-    // Create auth user via Supabase Admin — in production this should be a server action
-    // For now we insert into staff table (admin must manually create auth user)
-    const { error } = await supabase.from('staff').insert({
+    const result = await createStaffMember({
       clinic_id: clinicId,
-      email: form.email.trim(),
       full_name: form.full_name.trim(),
+      email: form.email.trim(),
+      password: form.password,
       role: form.role,
     });
 
-    if (error) {
-      toast.error('Failed to add staff member. Email may already be in use.');
+    if (result.error) {
+      toast.error(
+        result.error.includes('already registered')
+          ? 'That email is already in use.'
+          : 'Failed to add staff member. Please try again.'
+      );
     } else {
-      toast.success(`${form.full_name} added. Create their Supabase Auth account with the same email to activate login.`);
+      toast.success(`${form.full_name} has been added. Share their email and password with them directly.`);
       onSuccess();
     }
+
     setLoading(false);
   }
 
@@ -95,6 +98,15 @@ function AddStaffForm({ clinicId, onSuccess, onCancel, toast }: AddStaffFormProp
         error={errors.email}
         required
       />
+      <Input
+        label="Temporary Password"
+        type="password"
+        placeholder="Min. 8 characters"
+        value={form.password}
+        onChange={e => set('password', e.target.value)}
+        error={errors.password}
+        required
+      />
       <Select
         label="Role"
         value={form.role}
@@ -104,21 +116,15 @@ function AddStaffForm({ clinicId, onSuccess, onCancel, toast }: AddStaffFormProp
         <option value="admin">Admin</option>
       </Select>
 
-      <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg">
-        <p className="text-xs text-amber-700">
-          <strong>Note:</strong> After adding the staff record here, go to your Supabase dashboard → Authentication → Users → Create User with the same email, then link the auth UUID to this staff record.
-        </p>
-      </div>
-
       <div className="flex gap-3 pt-1">
-        <Button type="submit" loading={loading}>Add Staff</Button>
+        <Button type="submit" loading={loading}>Add Staff Member</Button>
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
       </div>
     </form>
   );
 }
 
-/* ─── Panel ─────────────────────────────────────────────── */
+// ─── Staff Panel ──────────────────────────────────────────────
 
 interface StaffPanelProps {
   staff: Staff[];
@@ -136,14 +142,16 @@ export function StaffPanel({ staff, currentStaffId, clinicId, onRefresh, toast }
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
-    const supabase = createClient();
-    const { error } = await supabase.from('staff').delete().eq('id', deleteTarget.id);
-    if (error) {
-      toast.error('Failed to remove staff member.');
+
+    const result = await deleteStaffMember(deleteTarget.id);
+
+    if (result.error) {
+      toast.error('Failed to remove staff member. Please try again.');
     } else {
-      toast.success(`${deleteTarget.full_name} removed.`);
+      toast.success(`${deleteTarget.full_name} has been removed.`);
       onRefresh();
     }
+
     setDeleting(false);
     setDeleteTarget(null);
   }
@@ -157,7 +165,8 @@ export function StaffPanel({ staff, currentStaffId, clinicId, onRefresh, toast }
           {staff.map(s => {
             const isCurrentUser = s.id === currentStaffId;
             return (
-              <div key={s.id}
+              <div
+                key={s.id}
                 className="flex items-center gap-3 px-4 py-3.5 bg-gray-50 rounded-xl border border-gray-100"
               >
                 <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
@@ -165,11 +174,14 @@ export function StaffPanel({ staff, currentStaffId, clinicId, onRefresh, toast }
                     {s.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                   </span>
                 </div>
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-medium text-gray-900 text-sm">{s.full_name}</p>
                     {isCurrentUser && (
-                      <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">You</span>
+                      <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">
+                        You
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
@@ -187,6 +199,7 @@ export function StaffPanel({ staff, currentStaffId, clinicId, onRefresh, toast }
                     </span>
                   </div>
                 </div>
+
                 {!isCurrentUser && (
                   <button
                     onClick={() => setDeleteTarget(s)}
@@ -220,7 +233,7 @@ export function StaffPanel({ staff, currentStaffId, clinicId, onRefresh, toast }
         onConfirm={handleDelete}
         loading={deleting}
         title="Remove Staff Member"
-        message={`Remove ${deleteTarget?.full_name} from your clinic? They will lose access to the system.`}
+        message={`Remove ${deleteTarget?.full_name} from your clinic? They will lose access immediately.`}
         confirmLabel="Remove"
       />
     </div>
