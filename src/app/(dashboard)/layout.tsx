@@ -4,7 +4,9 @@ import { Sidebar, BottomNav } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { ToastContainer } from '@/components/ui/Toast';
 import { SplashScreen } from '@/components/ui/SplashScreen';
+import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { useToast } from '@/lib/hooks/useToast';
+import { useTutorial } from '@/lib/hooks/useTutorial';
 import { createContext, useContext } from 'react';
 
 type ToastFn = {
@@ -25,10 +27,11 @@ export const useAppToast = () => useContext(ToastContext);
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { toasts, toast, removeToast } = useToast();
+  const { showTutorial, completeTutorial, skipTutorial } = useTutorial();
 
   return (
     <ToastContext.Provider value={toast}>
-      {/* Splash screen — auto-dismisses after 1.2s */}
+      {/* Splash screen */}
       <SplashScreen />
 
       <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -45,6 +48,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <BottomNav />
       <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* First-login tutorial — only shows once */}
+      {showTutorial && (
+        <TutorialOverlay
+          onComplete={completeTutorial}
+          onSkip={skipTutorial}
+        />
+      )}
     </ToastContext.Provider>
   );
 }

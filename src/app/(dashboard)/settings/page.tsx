@@ -10,6 +10,7 @@ import { StaffPanel } from '@/components/settings/StaffPanel';
 import { ChangePasswordForm } from '@/components/settings/ChangePasswordForm';
 import { DataBackupNotice } from '@/components/settings/DataBackupNotice';
 import { LogoUpload } from '@/components/settings/LogoUpload';
+import { ReplayTutorialButton } from '@/components/tutorial/ReplayTutorialButton';
 import { useAppToast } from '@/app/(dashboard)/layout';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { Building2, Users, Stethoscope, Lock } from 'lucide-react';
@@ -87,7 +88,7 @@ export default function SettingsPage() {
         <SkeletonCard />
       ) : (
         <>
-          {/* Clinic Info tab */}
+          {/* Clinic Info */}
           {activeTab === 'clinic' && clinic && clinicId && (
             <div className="space-y-4">
 
@@ -124,6 +125,19 @@ export default function SettingsPage() {
                     onSuccess={updated => setClinic(updated)}
                     toast={toast}
                   />
+                </CardBody>
+              </Card>
+
+              {/* Help & Tutorial */}
+              <Card>
+                <CardHeader>
+                  <h3 className="font-semibold text-gray-900">Help</h3>
+                </CardHeader>
+                <CardBody className="space-y-3">
+                  <ReplayTutorialButton />
+                  <p className="text-xs text-gray-400">
+                    Replays the onboarding tour that shows how to use each section of the app.
+                  </p>
                 </CardBody>
               </Card>
 
