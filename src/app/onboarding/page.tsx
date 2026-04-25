@@ -93,7 +93,7 @@ export default function OnboardingPage() {
             </div>
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">You're all set! 🦷</h2>
+            <h2 className="text-2xl font-bold text-gray-900">You're all set!</h2>
             <p className="text-gray-500 mt-2 text-sm">
               <strong className="text-gray-800">{form.clinicName}</strong> is ready.
               Taking you to your dashboard…
