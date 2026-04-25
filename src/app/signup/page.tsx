@@ -226,14 +226,6 @@ export default function SignupPage() {
           </p>
         </div>
 
-        <div className="mt-4 bg-white/60 border border-gray-100 rounded-xl px-5 py-3.5 flex items-center gap-3">
-          <div className="text-2xl">🦷</div>
-          <div>
-            <p className="text-xs font-semibold text-gray-700">Free forever — no credit card needed</p>
-            <p className="text-xs text-gray-400">50 patients, full features. Upgrade anytime.</p>
-          </div>
-        </div>
-
         <p className="text-center text-xs text-gray-400 mt-4">
           Dental CMS · For clinic use only
         </p>
