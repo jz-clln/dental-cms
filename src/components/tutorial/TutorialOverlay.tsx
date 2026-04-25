@@ -26,6 +26,7 @@ interface TutorialStep {
   description: string;
   icon: React.ElementType;
   tip?: string;
+  tipLabel?: string;
   action?: {
     label: string;
     href: string;
@@ -39,74 +40,79 @@ const STEPS: TutorialStep[] = [
     id: 'welcome',
     title: 'Welcome to Dental CMS',
     description:
-      'A quick tour of the 6 things you need to know to run your clinic from day one. Takes about 2 minutes.',
+      "Let's walk through the key features so you can get your clinic up and running. This tour covers everything from patients to reports and takes about 2 minutes.",
     icon: Stethoscope,
   },
   {
     id: 'patients',
-    title: 'Patients',
+    title: 'Managing Patients',
     description:
-      'Every patient gets a profile with personal info, dental history, appointments, billing, and a full treatment timeline.',
+      'Each patient has their own profile with personal details, dental history, appointments, billing records, and a full treatment timeline. Start by adding your first patient.',
     icon: Users,
-    tip: 'Add patients manually or one by one.',
+    tip: 'You can add patients one by one or fill in their details as they come in for their first visit.',
     action: { label: 'Add your first patient', href: '/patients/new' },
   },
   {
     id: 'appointments',
-    title: 'Appointments',
+    title: 'Booking Appointments',
     description:
-      "A weekly calendar showing every dentist's schedule. Filter by status and update appointments in one tap — Scheduled through Done.",
+      'The appointments page shows a weekly calendar for all your dentists. You can filter by status and move an appointment from Scheduled to Done with a single tap.',
     icon: Calendar,
-    tip: 'Blue = Scheduled · Teal = Confirmed · Green = Done · Red = No-show',
+    tipLabel: 'Color guide',
+    tip: 'Blue: Scheduled · Teal: Confirmed · Green: Done · Red: No-show · Gray: Cancelled',
     action: { label: 'Book an appointment', href: '/appointments/new' },
   },
   {
     id: 'tooth-chart',
-    title: 'Tooth Chart',
+    title: 'Digital Tooth Chart',
     description:
-      "An interactive 32-tooth diagram on each patient's profile. Tap any tooth to log a treatment — fillings, extractions, crowns, and more.",
+      'Open any patient profile and go to the Tooth Chart tab. You will see a full 32-tooth diagram. Tap a tooth to record a treatment like a filling, extraction, or crown.',
     icon: Stethoscope,
+    tip: 'Each treatment type is color coded so you can see a patient\'s full dental history at a glance.',
   },
   {
     id: 'billing',
-    title: 'Billing',
+    title: 'Tracking Billing',
     description:
-      'Add charges after treatments and record payments in cash, GCash, Maya, or card. Every patient shows Paid, Partial, or Unpaid at a glance.',
+      'After each treatment, add the charges directly from the patient profile. You can record payments in cash, GCash, Maya, or card. Each patient will show their balance status clearly.',
     icon: Receipt,
+    tip: "Today's total revenue is always shown at the top of the Billing page.",
     action: { label: 'Go to Billing', href: '/billing' },
   },
   {
     id: 'inventory',
-    title: 'Inventory',
+    title: 'Managing Supplies',
     description:
-      'Track all dental supplies with current stock levels. Items below reorder level are flagged automatically.',
+      'Keep track of all your dental supplies and their stock levels. When an item drops below your reorder point, it gets flagged automatically so you never run out.',
     icon: Package,
-    tip: 'The notification bell alerts you when stock runs low.',
+    tip: 'You will also get a notification bell alert when any item runs low.',
     action: { label: 'Set up inventory', href: '/inventory' },
   },
   {
     id: 'reports',
-    title: 'Reports',
+    title: 'Viewing Reports',
     description:
-      'Revenue by day, appointments by status, top treatments, and no-show rate — all from real data, updated in real time.',
+      'The Reports page gives you a clear picture of how your clinic is performing. You can see daily revenue, appointment breakdowns, your most common treatments, and no-show rates.',
     icon: BarChart3,
+    tip: 'Reports update automatically as you add appointments and record payments.',
     action: { label: 'View Reports', href: '/reports' },
   },
   {
     id: 'settings',
-    title: 'Settings',
+    title: 'Setting Up Your Clinic',
     description:
-      'Add your clinic logo, update clinic info, add dentists with their schedules, and manage staff accounts.',
+      'In Settings, you can upload your clinic logo, update your clinic details, add dentists with their working schedules, and manage staff access.',
     icon: Settings,
-    tip: 'Add dentists first — it makes scheduling smoother.',
+    tip: 'We recommend adding your dentists first. It makes assigning appointments much easier.',
     action: { label: 'Open Settings', href: '/settings' },
   },
   {
     id: 'done',
-    title: "You're all set",
+    title: "You're ready to go",
     description:
-      'Your clinic is ready. Data is saved and backed up automatically. Press "/" anywhere in the app to open global search.',
+      "That's everything you need to get started. Your data is saved and backed up automatically. If you ever need a refresher, you can replay this tour from the Settings page.",
     icon: CheckCircle,
+    tip: 'Press the "/" key anywhere in the app to open global search.',
   },
 ];
 
@@ -193,8 +199,8 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
           />
         </div>
 
-        {/* Left teal accent strip + content */}
         <div className="flex">
+          {/* Left teal accent strip */}
           <div className="w-1 bg-teal-600 flex-shrink-0" />
 
           <div className="flex-1 min-w-0">
@@ -221,7 +227,7 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
                 />
               </div>
 
-              {/* Step counter — matches dashboard "TODAY'S APPOINTMENTS" label style */}
+              {/* Step counter */}
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
                 Step {currentStep + 1} of {STEPS.length}
               </p>
@@ -236,15 +242,19 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
                 {step.description}
               </p>
 
-              {/* Tip — teal-tinted */}
+              {/* Tip box */}
               {step.tip && (
-                <div className="mt-4 flex items-start gap-2 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 flex-shrink-0" />
+                <div className="mt-4 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2.5">
+                  {step.tipLabel && (
+                    <p className="text-[10px] font-semibold text-teal-500 uppercase tracking-widest mb-1">
+                      {step.tipLabel}
+                    </p>
+                  )}
                   <p className="text-xs text-teal-700 leading-relaxed">{step.tip}</p>
                 </div>
               )}
 
-              {/* Action link — matches "View all →" dashboard link style */}
+              {/* Action link */}
               {step.action && !isLast && (
                 <button
                   onClick={handleAction}
