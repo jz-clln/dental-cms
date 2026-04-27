@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/verify', '/onboarding', '/api/auth/callback'];
+const PUBLIC_ROUTES = ['/login', '/signup', '/verify', '/onboarding', '/api/auth/callback', '/reset-password', '/forgot-password'];
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -21,15 +21,12 @@ export async function middleware(request: NextRequest) {
             options?: CookieOptions;
           }[]
         ) {
-          // Set cookies on request
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
 
-          // Recreate response to attach cookies
           supabaseResponse = NextResponse.next({ request });
 
-          // Set cookies on response
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -38,7 +35,6 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -49,19 +45,16 @@ export async function middleware(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith(route + '/')
   );
 
-  // Root redirect
   if (pathname === '/') {
     return NextResponse.redirect(
       new URL(user ? '/dashboard' : '/login', request.url)
     );
   }
 
-  // Not logged in — send to login
   if (!user && !isPublicRoute) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Logged in — redirect away from auth pages
   if (user && (pathname === '/login' || pathname === '/signup')) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
