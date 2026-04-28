@@ -35,7 +35,7 @@ export default function NewPatientPage() {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => router.back()}
+        onClick={() => router.push('/patients')}
         className="text-gray-500"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -52,7 +52,7 @@ export default function NewPatientPage() {
             <PatientForm
               clinicId={clinicId}
               toast={toast}
-              onCancel={() => router.back()}
+              onCancel={() => router.push('/patients')}
             />
           ) : (
             <div className="space-y-4">

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { InventoryItem, InventoryFormData } from '@/types';
 import { Input, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { INVENTORY_CATEGORIES, getTodayString } from '@/lib/utils';
 
 /* ─── ADD / EDIT ITEM FORM ─────────────────────────────────── */
@@ -27,7 +28,10 @@ interface AddErrors {
 
 export function AddItemForm({ clinicId, existing, onSuccess, onCancel, toast }: AddItemFormProps) {
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [errors, setErrors] = useState<AddErrors>({});
+
   const [form, setForm] = useState<InventoryFormData>({
     item_name: existing?.item_name ?? '',
     category: existing?.category ?? '',
@@ -37,11 +41,14 @@ export function AddItemForm({ clinicId, existing, onSuccess, onCancel, toast }: 
     last_restocked: existing?.last_restocked ?? getTodayString(),
   });
 
+  // Dirty: any field changed from initial/empty state
+  const isDirty = !submitted && (
+    !!form.item_name || !!form.category || form.quantity > 0
+  );
+
   function set<K extends keyof InventoryFormData>(field: K, value: InventoryFormData[K]) {
     setForm(prev => ({ ...prev, [field]: value }));
-    if (errors[field as keyof AddErrors]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }));
-    }
+    if (errors[field as keyof AddErrors]) setErrors(prev => ({ ...prev, [field]: undefined }));
   }
 
   function validate(): boolean {
@@ -72,8 +79,7 @@ export function AddItemForm({ clinicId, existing, onSuccess, onCancel, toast }: 
     };
 
     if (existing) {
-      const { error } = await supabase
-        .from('inventory_items').update(payload).eq('id', existing.id);
+      const { error } = await supabase.from('inventory_items').update(payload).eq('id', existing.id);
       if (error) { toast.error('Failed to update item.'); setLoading(false); return; }
       toast.success('Item updated successfully.');
     } else {
@@ -82,74 +88,57 @@ export function AddItemForm({ clinicId, existing, onSuccess, onCancel, toast }: 
       toast.success(`"${form.item_name}" added to inventory.`);
     }
 
+    setSubmitted(true);
     setLoading(false);
     onSuccess();
   }
 
+  function handleCancel() {
+    if (isDirty) setShowConfirm(true);
+    else onCancel();
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <Input
-        label="Item Name"
-        placeholder="e.g. Dental Gloves (Medium)"
-        value={form.item_name}
-        onChange={e => set('item_name', e.target.value)}
-        error={errors.item_name}
-        required
+    <>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          label="Item Name" placeholder="e.g. Dental Gloves (Medium)"
+          value={form.item_name} onChange={e => set('item_name', e.target.value)}
+          error={errors.item_name} required
+        />
+        <div className="grid grid-cols-2 gap-4">
+          <Select label="Category" value={form.category}
+            onChange={e => set('category', e.target.value)}
+            error={errors.category} placeholder="Select category…">
+            {INVENTORY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </Select>
+          <Input label="Unit" placeholder="pcs, box, bottle…"
+            value={form.unit} onChange={e => set('unit', e.target.value)} error={errors.unit} />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="Current Quantity" type="number" min={0}
+            value={form.quantity} onChange={e => set('quantity', Number(e.target.value))} error={errors.quantity} />
+          <Input label="Reorder Level" type="number" min={0}
+            value={form.reorder_level} onChange={e => set('reorder_level', Number(e.target.value))}
+            error={errors.reorder_level} hint="Alert when stock falls below this" />
+        </div>
+        <Input label="Last Restocked" type="date"
+          value={form.last_restocked} onChange={e => set('last_restocked', e.target.value)} />
+
+        <div className="flex gap-3 pt-1">
+          <Button type="submit" loading={loading} className="flex-1 sm:flex-none">
+            {existing ? 'Save Changes' : 'Add Item'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={handleCancel}>Cancel</Button>
+        </div>
+      </form>
+
+      <UnsavedChangesModal
+        open={showConfirm}
+        onStay={() => setShowConfirm(false)}
+        onLeave={() => { setShowConfirm(false); onCancel(); }}
       />
-
-      <div className="grid grid-cols-2 gap-4">
-        <Select
-          label="Category"
-          value={form.category}
-          onChange={e => set('category', e.target.value)}
-          error={errors.category}
-          placeholder="Select category…"
-        >
-          {INVENTORY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </Select>
-        <Input
-          label="Unit"
-          placeholder="pcs, box, bottle…"
-          value={form.unit}
-          onChange={e => set('unit', e.target.value)}
-          error={errors.unit}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <Input
-          label="Current Quantity"
-          type="number"
-          min={0}
-          value={form.quantity}
-          onChange={e => set('quantity', Number(e.target.value))}
-          error={errors.quantity}
-        />
-        <Input
-          label="Reorder Level"
-          type="number"
-          min={0}
-          value={form.reorder_level}
-          onChange={e => set('reorder_level', Number(e.target.value))}
-          error={errors.reorder_level}
-          hint="Alert when stock falls below this"
-        />
-      </div>
-
-      <Input
-        label="Last Restocked"
-        type="date"
-        value={form.last_restocked}
-        onChange={e => set('last_restocked', e.target.value)}
-      />
-
-      <div className="flex gap-3 pt-1">
-        <Button type="submit" loading={loading} className="flex-1 sm:flex-none">
-          {existing ? 'Save Changes' : 'Add Item'}
-        </Button>
-        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-      </div>
-    </form>
+    </>
   );
 }
 
@@ -166,7 +155,11 @@ export function RestockForm({ item, onSuccess, onCancel, toast }: RestockFormPro
   const [qty, setQty] = useState(0);
   const [date, setDate] = useState(getTodayString());
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
+
+  const isDirty = !submitted && qty > 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -183,58 +176,59 @@ export function RestockForm({ item, onSuccess, onCancel, toast }: RestockFormPro
     if (dbErr) {
       toast.error('Failed to update stock.');
     } else {
+      setSubmitted(true);
       toast.success(`Stock updated: ${item.item_name} is now ${newQty} ${item.unit}.`);
       onSuccess();
     }
     setLoading(false);
   }
 
+  function handleCancel() {
+    if (isDirty) setShowConfirm(true);
+    else onCancel();
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Current stock display */}
-      <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-        <p className="text-sm text-gray-500">Item</p>
-        <p className="font-semibold text-gray-900 mt-0.5">{item.item_name}</p>
-        <div className="flex gap-6 mt-3">
-          <div>
-            <p className="text-xs text-gray-400">Current Stock</p>
-            <p className={`text-xl font-bold mt-0.5 ${item.quantity <= item.reorder_level ? 'text-red-600' : 'text-gray-900'}`}>
-              {item.quantity} <span className="text-sm font-normal text-gray-400">{item.unit}</span>
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Reorder Level</p>
-            <p className="text-xl font-bold mt-0.5 text-gray-400">
-              {item.reorder_level} <span className="text-sm font-normal">{item.unit}</span>
-            </p>
+    <>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+          <p className="text-sm text-gray-500">Item</p>
+          <p className="font-semibold text-gray-900 mt-0.5">{item.item_name}</p>
+          <div className="flex gap-6 mt-3">
+            <div>
+              <p className="text-xs text-gray-400">Current Stock</p>
+              <p className={`text-xl font-bold mt-0.5 ${item.quantity <= item.reorder_level ? 'text-red-600' : 'text-gray-900'}`}>
+                {item.quantity} <span className="text-sm font-normal text-gray-400">{item.unit}</span>
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Reorder Level</p>
+              <p className="text-xl font-bold mt-0.5 text-gray-400">
+                {item.reorder_level} <span className="text-sm font-normal">{item.unit}</span>
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <Input
-        label="Quantity to Add"
-        type="number"
-        min={1}
-        value={qty || ''}
-        onChange={e => { setQty(Number(e.target.value)); setError(''); }}
-        error={error}
-        placeholder="0"
-        hint={qty > 0 ? `New total will be ${item.quantity + Number(qty)} ${item.unit}` : undefined}
+        <Input
+          label="Quantity to Add" type="number" min={1}
+          value={qty || ''} onChange={e => { setQty(Number(e.target.value)); setError(''); }}
+          error={error} placeholder="0"
+          hint={qty > 0 ? `New total will be ${item.quantity + Number(qty)} ${item.unit}` : undefined}
+        />
+        <Input label="Restock Date" type="date" value={date} onChange={e => setDate(e.target.value)} />
+
+        <div className="flex gap-3 pt-1">
+          <Button type="submit" loading={loading} className="flex-1 sm:flex-none">Update Stock</Button>
+          <Button type="button" variant="secondary" onClick={handleCancel}>Cancel</Button>
+        </div>
+      </form>
+
+      <UnsavedChangesModal
+        open={showConfirm}
+        onStay={() => setShowConfirm(false)}
+        onLeave={() => { setShowConfirm(false); onCancel(); }}
       />
-
-      <Input
-        label="Restock Date"
-        type="date"
-        value={date}
-        onChange={e => setDate(e.target.value)}
-      />
-
-      <div className="flex gap-3 pt-1">
-        <Button type="submit" loading={loading} className="flex-1 sm:flex-none">
-          Update Stock
-        </Button>
-        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-      </div>
-    </form>
+    </>
   );
 }
