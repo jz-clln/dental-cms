@@ -4,14 +4,17 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Appointment, AppointmentFormData, Patient, Dentist } from '@/types';
-import { Input, Select, Textarea } from '@/components/ui/Input';
+import { Input, Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { CustomSelect } from '@/components/ui/CustomSelect';
 import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { useUnsavedChanges } from '@/lib/hooks/useUnsavedChanges';
+import { TimePicker } from '@/components/ui/TimePicker';
 import { getTodayString, getPatientName, TREATMENT_TYPES } from '@/lib/utils';
-import { Search } from 'lucide-react';
+import { Search, AlertTriangle } from 'lucide-react';
 
 const STATUSES = ['Scheduled', 'Confirmed', 'Done', 'No-show', 'Cancelled'];
+const ACTIVE_STATUSES = ['Scheduled', 'Confirmed'];
 
 interface AppointmentFormProps {
   clinicId: string;
@@ -30,6 +33,12 @@ interface FormErrors {
   dentist_id?: string;
 }
 
+interface ConflictInfo {
+  dentistName: string;
+  time: string;
+  patientName: string;
+}
+
 export function AppointmentForm({
   clinicId, existing, prefillPatientId, onSuccess, onCancel, toast,
 }: AppointmentFormProps) {
@@ -40,6 +49,10 @@ export function AppointmentForm({
   const [patients, setPatients] = useState<Patient[]>([]);
   const [dentists, setDentists] = useState<Dentist[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
+
+  const [conflict, setConflict] = useState<ConflictInfo | null>(null);
+  const [checkingConflict, setCheckingConflict] = useState(false);
+  const conflictTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [patientSearch, setPatientSearch] = useState('');
   const [patientDropOpen, setPatientDropOpen] = useState(false);
@@ -58,7 +71,6 @@ export function AppointmentForm({
 
   const [form, setForm] = useState<AppointmentFormData>(initialForm);
 
-  // Dirty check — compare current form to initial
   const isDirty = !submitted && (
     form.patient_id !== initialForm.patient_id ||
     form.dentist_id !== initialForm.dentist_id ||
@@ -101,6 +113,53 @@ export function AppointmentForm({
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  // ── Conflict check ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!form.dentist_id || !form.appointment_date || !form.appointment_time) {
+      setConflict(null);
+      return;
+    }
+
+    if (conflictTimerRef.current) clearTimeout(conflictTimerRef.current);
+
+    conflictTimerRef.current = setTimeout(async () => {
+      setCheckingConflict(true);
+      const supabase = createClient();
+
+      const query = supabase
+        .from('appointments')
+        .select('id, appointment_time, patient_id, patient:patients(first_name, last_name)')
+        .eq('clinic_id', clinicId)
+        .eq('dentist_id', form.dentist_id)
+        .eq('appointment_date', form.appointment_date)
+        .eq('appointment_time', form.appointment_time)
+        .in('status', ACTIVE_STATUSES);
+
+      if (existing?.id) query.neq('id', existing.id);
+
+      const { data } = await query;
+
+      if (data && data.length > 0) {
+        const conflicting = data[0];
+        const dentist = dentists.find(d => d.id === form.dentist_id);
+        const patient = conflicting.patient as any;
+        setConflict({
+          dentistName: dentist?.name ?? 'This dentist',
+          time: form.appointment_time,
+          patientName: patient
+            ? `${patient.first_name} ${patient.last_name}`
+            : 'another patient',
+        });
+      } else {
+        setConflict(null);
+      }
+
+      setCheckingConflict(false);
+    }, 400);
+
+    return () => { if (conflictTimerRef.current) clearTimeout(conflictTimerRef.current); };
+  }, [form.dentist_id, form.appointment_date, form.appointment_time, dentists, clinicId, existing?.id]);
+
   const filteredPatients = patients.filter(p =>
     getPatientName(p).toLowerCase().includes(patientSearch.toLowerCase()) ||
     (p.contact_number ?? '').includes(patientSearch)
@@ -119,6 +178,7 @@ export function AppointmentForm({
     if (!form.treatment_type) e.treatment_type = 'Please select a treatment type.';
     if (!form.appointment_date) e.appointment_date = 'Please pick a date.';
     if (!form.appointment_time) e.appointment_time = 'Please pick a time.';
+    if (!form.dentist_id) e.dentist_id = 'Please assign a dentist.';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -157,16 +217,25 @@ export function AppointmentForm({
   }
 
   function handleCancel() {
-    if (isDirty) {
-      setShowConfirm(true);
-    } else {
-      onCancel?.();
-    }
+    if (isDirty) setShowConfirm(true);
+    else onCancel?.();
   }
+
+  function formatTime(t: string) {
+    const [h, m] = t.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hour = h % 12 || 12;
+    return `${hour}:${String(m).padStart(2, '0')} ${ampm}`;
+  }
+
+  // Build option arrays for CustomSelect
+  const treatmentOptions = TREATMENT_TYPES.map(t => ({ value: t, label: t }));
+  const dentistOptions = dentists.map(d => ({ value: d.id, label: d.name }));
+  const statusOptions = STATUSES.map(s => ({ value: s, label: s }));
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
 
         {/* Patient search */}
         <div className="flex flex-col gap-1" ref={patientRef}>
@@ -215,33 +284,65 @@ export function AppointmentForm({
           {errors.patient_id && <p className="text-xs text-red-600">{errors.patient_id}</p>}
         </div>
 
-        <Select
+        {/* Treatment Type */}
+        <CustomSelect
           label="Treatment Type"
           value={form.treatment_type}
-          onChange={e => set('treatment_type', e.target.value)}
-          error={errors.treatment_type}
+          onChange={(val: string) => set('treatment_type', val)}
+          options={treatmentOptions}
           placeholder="Select treatment…"
-        >
-          {TREATMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-        </Select>
+          error={errors.treatment_type}
+        />
 
+        {/* Date + Time */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Date" type="date" value={form.appointment_date}
             onChange={e => set('appointment_date', e.target.value)} error={errors.appointment_date} />
-          <Input label="Time" type="time" value={form.appointment_time}
-            onChange={e => set('appointment_time', e.target.value)} error={errors.appointment_time} />
+          <TimePicker
+            label="Time"
+            value={form.appointment_time}
+            onChange={(val: string) => set('appointment_time', val)}
+            error={errors.appointment_time}
+          />
         </div>
 
+        {/* Dentist + Status */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Select label="Assigned Dentist" value={form.dentist_id}
-            onChange={e => set('dentist_id', e.target.value)} placeholder="Select dentist…">
-            {dentists.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </Select>
-          <Select label="Status" value={form.status}
-            onChange={e => set('status', e.target.value as AppointmentFormData['status'])}>
-            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </Select>
+          <div className="flex flex-col gap-1">
+            <CustomSelect
+              label="Assigned Dentist"
+              value={form.dentist_id}
+              onChange={(val: string) => set('dentist_id', val)}
+              options={dentistOptions}
+              placeholder="Select dentist…"
+              error={errors.dentist_id}
+            />
+            {checkingConflict && (
+              <p className="text-xs text-gray-400">Checking availability…</p>
+            )}
+          </div>
+          <CustomSelect
+            label="Status"
+            value={form.status}
+            onChange={(val: string) => set('status', val)}
+            options={statusOptions}
+          />
         </div>
+
+        {/* Conflict warning */}
+        {conflict && (
+          <div className="flex items-start gap-3 px-4 py-3.5 bg-amber-50 border border-amber-200 rounded-xl">
+            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Scheduling conflict</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                {conflict.dentistName} already has an appointment at{' '}
+                <strong>{formatTime(conflict.time)}</strong> with{' '}
+                <strong>{conflict.patientName}</strong>. Please choose a different time.
+              </p>
+            </div>
+          </div>
+        )}
 
         <Textarea
           label="Notes (optional)"

@@ -135,7 +135,7 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="First Name"

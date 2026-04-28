@@ -89,7 +89,8 @@ export default function DashboardPage() {
           .order('appointment_time'),
         supabase.from('patients')
           .select('id', { count: 'exact', head: true })
-          .eq('clinic_id', clinicId),
+          .eq('clinic_id', clinicId)
+          .eq('archived', false),
         supabase.from('inventory_items')
           .select('id, quantity, reorder_level')
           .eq('clinic_id', clinicId),
@@ -104,6 +105,7 @@ export default function DashboardPage() {
         supabase.from('patients')
           .select('id, created_at, first_name, last_name')
           .eq('clinic_id', clinicId)
+          .eq('archived', false)
           .order('created_at', { ascending: false }).limit(3),
         supabase.from('payments')
           .select('id, created_at, amount_paid, patient:patients(first_name, last_name)')

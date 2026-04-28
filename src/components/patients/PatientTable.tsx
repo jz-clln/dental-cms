@@ -11,7 +11,7 @@ import { ConfirmModal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   Search, ChevronUp, ChevronDown,
-  UserPlus, Archive, ArchiveRestore, Eye,
+  UserPlus, Archive, ArchiveRestore, Eye, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -30,8 +30,14 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [showArchived, setShowArchived] = useState(false);
+
+  // Archive modal
   const [archiveTarget, setArchiveTarget] = useState<Patient | null>(null);
   const [archiving, setArchiving] = useState(false);
+
+  // Permanent delete modal
+  const [deleteTarget, setDeleteTarget] = useState<Patient | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
@@ -42,17 +48,22 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
     }
   }
 
+  // ── Filtering ───────────────────────────────────────────────
+  // Key fix: use strict boolean check — null/undefined treated as not archived
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return patients.filter(p => {
+      const isArchived = (p as any).archived === true;
+
       const matchSearch = !q ||
         getPatientName(p).toLowerCase().includes(q) ||
         (p.contact_number ?? '').includes(q) ||
         p.id.toLowerCase().includes(q);
-      const matchArchived = showArchived
-        ? (p as any).archived === true
-        : (p as any).archived !== true;
-      return matchSearch && matchArchived;
+
+      // Show archived only in archived view, hide them in normal view
+      const matchTab = showArchived ? isArchived : !isArchived;
+
+      return matchSearch && matchTab;
     });
   }, [patients, search, showArchived]);
 
@@ -79,6 +90,9 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
       : <ChevronDown className="w-3 h-3 text-teal-700" />;
   };
 
+  const archivedCount = patients.filter(p => (p as any).archived === true).length;
+
+  // ── Archive / Restore ───────────────────────────────────────
   async function handleArchiveToggle() {
     if (!archiveTarget) return;
     setArchiving(true);
@@ -96,7 +110,7 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
       toast.success(
         isArchived
           ? `${getPatientName(archiveTarget)} has been restored.`
-          : `${getPatientName(archiveTarget)} has been archived.`
+          : `${getPatientName(archiveTarget)} has been archived and hidden from the patient list.`
       );
       onRefresh();
     }
@@ -104,7 +118,26 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
     setArchiveTarget(null);
   }
 
-  const archivedCount = patients.filter(p => (p as any).archived === true).length;
+  // ── Permanent Delete ────────────────────────────────────────
+  async function handlePermanentDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const supabase = createClient();
+
+    const { error } = await supabase
+      .from('patients')
+      .delete()
+      .eq('id', deleteTarget.id);
+
+    if (error) {
+      toast.error('Failed to delete patient. They may have linked appointments or billing records.');
+    } else {
+      toast.success(`${getPatientName(deleteTarget)} has been permanently deleted.`);
+      onRefresh();
+    }
+    setDeleting(false);
+    setDeleteTarget(null);
+  }
 
   if (loading) {
     return (
@@ -134,7 +167,7 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
             />
           </div>
 
-          {/* Archive toggle */}
+          {/* Archived toggle */}
           <button
             onClick={() => setShowArchived(v => !v)}
             className={cn(
@@ -169,14 +202,14 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
       {showArchived && (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
           <Archive className="w-4 h-4 flex-shrink-0" />
-          Showing archived patients. These are hidden from all other views but their records are preserved.
+          Showing archived patients. You can restore them or permanently delete their records.
         </div>
       )}
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
 
-        {/* ── Desktop table ───────────────────────────────── */}
+        {/* Desktop */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -204,12 +237,7 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
               {sorted.length === 0 ? (
                 <tr>
                   <td colSpan={5}>
-                    {/* No patients at all — show full illustrated empty state */}
-                    {!search && !showArchived && (
-                      <EmptyState type="patients" />
-                    )}
-
-                    {/* Search returned nothing */}
+                    {!search && !showArchived && <EmptyState type="patients" />}
                     {search && (
                       <EmptyState
                         type="generic"
@@ -217,8 +245,6 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
                         description={`No patients match "${search}". Try a different name, phone number, or ID.`}
                       />
                     )}
-
-                    {/* Archived tab is empty */}
                     {showArchived && !search && (
                       <EmptyState
                         type="generic"
@@ -226,8 +252,6 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
                         description="Patients you archive will appear here. Their records are always preserved."
                       />
                     )}
-
-                    {/* Searching within archived */}
                     {showArchived && search && (
                       <EmptyState
                         type="generic"
@@ -241,10 +265,10 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
                 sorted.map(patient => {
                   const isArchived = (patient as any).archived === true;
                   return (
-                    <tr key={patient.id} className={cn(
-                      'hover:bg-gray-50 transition-colors',
-                      isArchived && 'opacity-60'
-                    )}>
+                    <tr
+                      key={patient.id}
+                      className={cn('hover:bg-gray-50 transition-colors', isArchived && 'opacity-70')}
+                    >
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
@@ -265,19 +289,24 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
                       <td className="px-5 py-4 text-gray-700">{patient.contact_number ?? '—'}</td>
                       <td className="px-5 py-4 text-gray-500 text-xs">{formatDateShort(patient.created_at)}</td>
                       <td className="px-5 py-4">
-                        <div className="flex items-center gap-2 justify-end">
+                        <div className="flex items-center gap-1 justify-end">
+                          {/* View — only for active patients */}
                           {!isArchived && (
                             <Link
                               href={`/patients/${patient.id}`}
-                              className="flex items-center gap-1 text-teal-700 hover:text-teal-800 font-medium text-sm hover:underline"
+                              className="flex items-center gap-1 text-teal-700 hover:text-teal-800
+                                font-medium text-sm hover:underline px-2 py-1"
                             >
                               <Eye className="w-3.5 h-3.5" /> View
                             </Link>
                           )}
+
+                          {/* Archive / Restore */}
                           <button
                             onClick={() => setArchiveTarget(patient)}
+                            title={isArchived ? 'Restore patient' : 'Archive patient'}
                             className={cn(
-                              'flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg transition-colors',
+                              'flex items-center gap-1 text-xs font-medium px-2 py-1.5 rounded-lg transition-colors',
                               isArchived
                                 ? 'text-teal-600 hover:bg-teal-50'
                                 : 'text-gray-400 hover:bg-amber-50 hover:text-amber-600'
@@ -288,6 +317,18 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
                               : <><Archive className="w-3.5 h-3.5" /> Archive</>
                             }
                           </button>
+
+                          {/* Permanent delete — only in archived view */}
+                          {isArchived && (
+                            <button
+                              onClick={() => setDeleteTarget(patient)}
+                              title="Permanently delete"
+                              className="flex items-center gap-1 text-xs font-medium px-2 py-1.5
+                                rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -298,44 +339,28 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
           </table>
         </div>
 
-        {/* ── Mobile card list ────────────────────────────── */}
+        {/* Mobile cards */}
         <div className="md:hidden divide-y divide-gray-50">
           {sorted.length === 0 ? (
             <>
               {!search && !showArchived && <EmptyState type="patients" />}
-
               {search && (
-                <EmptyState
-                  type="generic"
-                  title="No patients found"
-                  description={`No patients match "${search}".`}
-                />
+                <EmptyState type="generic" title="No patients found"
+                  description={`No patients match "${search}".`} />
               )}
-
               {showArchived && !search && (
-                <EmptyState
-                  type="generic"
-                  title="No archived patients"
-                  description="Patients you archive will appear here."
-                />
-              )}
-
-              {showArchived && search && (
-                <EmptyState
-                  type="generic"
-                  title="No archived patients found"
-                  description={`No archived patients match "${search}".`}
-                />
+                <EmptyState type="generic" title="No archived patients"
+                  description="Patients you archive will appear here." />
               )}
             </>
           ) : (
             sorted.map(patient => {
               const isArchived = (patient as any).archived === true;
               return (
-                <div key={patient.id} className={cn(
-                  'flex items-center gap-3 px-4 py-4',
-                  isArchived && 'opacity-60'
-                )}>
+                <div
+                  key={patient.id}
+                  className={cn('flex items-center gap-3 px-4 py-4', isArchived && 'opacity-70')}
+                >
                   <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
                     <span className="text-teal-700 font-semibold text-sm">
                       {patient.first_name[0]}{patient.last_name[0]}
@@ -344,14 +369,13 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 truncate">{getPatientName(patient)}</p>
                     <p className="text-xs text-gray-500">
-                      {calculateAge(patient.birthday) !== null
-                        ? `${calculateAge(patient.birthday)} yrs` : ''}
+                      {calculateAge(patient.birthday) !== null ? `${calculateAge(patient.birthday)} yrs` : ''}
                       {patient.contact_number ? ` · ${patient.contact_number}` : ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 flex-shrink-0">
                     {!isArchived && (
-                      <Link href={`/patients/${patient.id}`} className="text-teal-700 text-lg">›</Link>
+                      <Link href={`/patients/${patient.id}`} className="text-teal-700 text-xl px-1">›</Link>
                     )}
                     <button
                       onClick={() => setArchiveTarget(patient)}
@@ -362,6 +386,14 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
                         : <Archive className="w-4 h-4" />
                       }
                     </button>
+                    {isArchived && (
+                      <button
+                        onClick={() => setDeleteTarget(patient)}
+                        className="p-1.5 text-gray-300 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -383,7 +415,7 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
         )}
       </div>
 
-      {/* Archive / Restore confirm modal */}
+      {/* Archive / Restore modal */}
       <ConfirmModal
         open={!!archiveTarget}
         onClose={() => setArchiveTarget(null)}
@@ -393,9 +425,20 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
         message={
           (archiveTarget as any)?.archived
             ? `Restore ${getPatientName(archiveTarget!)}? They will appear in the patient list again.`
-            : `Archive ${getPatientName(archiveTarget!)}? They will be hidden from all lists but their records will be kept. You can restore them at any time.`
+            : `Archive ${getPatientName(archiveTarget!)}? They will be hidden from all lists but their records are kept. You can restore them anytime from the Archived tab.`
         }
         confirmLabel={(archiveTarget as any)?.archived ? 'Restore' : 'Archive'}
+      />
+
+      {/* Permanent delete modal */}
+      <ConfirmModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handlePermanentDelete}
+        loading={deleting}
+        title="Permanently Delete Patient"
+        message={`This will permanently delete ${getPatientName(deleteTarget!)} and all their records — appointments, visit notes, billing, and payments. This cannot be undone.`}
+        confirmLabel="Delete Permanently"
       />
     </div>
   );

@@ -199,6 +199,7 @@ function AppointmentsContent() {
             appointment={selectedAppt}
             onUpdated={() => { load(); setShowDetailModal(false); }}
             onEdit={() => openEdit(selectedAppt)}
+            onDeleted={() => { load(); setShowDetailModal(false); setSelectedAppt(null); }}
             toast={toast}
           />
         )}
