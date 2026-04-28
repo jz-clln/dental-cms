@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Patient, PaymentFormData, PaymentMethod } from '@/types';
-import { Input, Select } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { getPatientName, getTodayString, formatPeso } from '@/lib/utils';
 import { Search, Banknote, Smartphone, CreditCard } from 'lucide-react';
 
@@ -33,6 +34,8 @@ export function PaymentForm({
   clinicId, prefillPatientId, prefillBalance, onSuccess, onCancel, toast,
 }: PaymentFormProps) {
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -47,6 +50,11 @@ export function PaymentForm({
     payment_date: getTodayString(),
     notes: '',
   });
+
+  // Dirty: patient selected OR amount typed OR notes written
+  const isDirty = !submitted && (
+    !!form.patient_id || form.amount_paid > 0 || !!form.notes
+  );
 
   useEffect(() => {
     async function load() {
@@ -105,123 +113,114 @@ export function PaymentForm({
     if (error) {
       toast.error('Failed to record payment.');
     } else {
+      setSubmitted(true);
       toast.success(`Payment of ${formatPeso(form.amount_paid)} recorded.`);
       onSuccess();
     }
     setLoading(false);
   }
 
+  function handleCancel() {
+    if (isDirty) setShowConfirm(true);
+    else onCancel();
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Patient search */}
-      <div className="flex flex-col gap-1" ref={dropRef}>
-        <label className="text-sm font-medium text-gray-700">Patient</label>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search patient…"
-            value={patientSearch}
-            onChange={e => {
-              setPatientSearch(e.target.value);
-              setDropOpen(true);
-              if (!e.target.value) set('patient_id', '');
-            }}
-            onFocus={() => setDropOpen(true)}
-            className={`w-full pl-9 pr-4 py-2 rounded-lg border text-sm
-              focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors
-              ${errors.patient_id ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
-          />
-          {dropOpen && patientSearch && (
-            <div className="absolute z-20 top-full mt-1 w-full bg-white rounded-xl border border-gray-100 shadow-lg overflow-hidden">
-              {filteredPatients.length === 0
-                ? <p className="text-sm text-gray-400 px-4 py-3">No patients found.</p>
-                : filteredPatients.map(p => (
-                  <button key={p.id} type="button"
-                    onClick={() => {
-                      set('patient_id', p.id);
-                      setPatientSearch(getPatientName(p));
-                      setDropOpen(false);
-                    }}
-                    className="w-full text-left px-4 py-2.5 hover:bg-teal-50 text-sm transition-colors"
-                  >
-                    <span className="font-medium text-gray-900">{getPatientName(p)}</span>
-                    {p.contact_number && <span className="text-gray-400 ml-2 text-xs">{p.contact_number}</span>}
-                  </button>
-                ))
-              }
-            </div>
+    <>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Patient search */}
+        <div className="flex flex-col gap-1" ref={dropRef}>
+          <label className="text-sm font-medium text-gray-700">Patient</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="text" placeholder="Search patient…" value={patientSearch}
+              onChange={e => { setPatientSearch(e.target.value); setDropOpen(true); if (!e.target.value) set('patient_id', ''); }}
+              onFocus={() => setDropOpen(true)}
+              className={`w-full pl-9 pr-4 py-2 rounded-lg border text-sm
+                focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors
+                ${errors.patient_id ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
+            />
+            {dropOpen && patientSearch && (
+              <div className="absolute z-20 top-full mt-1 w-full bg-white rounded-xl border border-gray-100 shadow-lg overflow-hidden">
+                {filteredPatients.length === 0
+                  ? <p className="text-sm text-gray-400 px-4 py-3">No patients found.</p>
+                  : filteredPatients.map(p => (
+                    <button key={p.id} type="button"
+                      onClick={() => { set('patient_id', p.id); setPatientSearch(getPatientName(p)); setDropOpen(false); }}
+                      className="w-full text-left px-4 py-2.5 hover:bg-teal-50 text-sm transition-colors"
+                    >
+                      <span className="font-medium text-gray-900">{getPatientName(p)}</span>
+                      {p.contact_number && <span className="text-gray-400 ml-2 text-xs">{p.contact_number}</span>}
+                    </button>
+                  ))
+                }
+              </div>
+            )}
+          </div>
+          {errors.patient_id && <p className="text-xs text-red-600">{errors.patient_id}</p>}
+        </div>
+
+        {/* Amount */}
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Amount Paid (₱)</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">₱</span>
+            <input
+              type="number" min={0} step={0.01} placeholder="0.00"
+              value={form.amount_paid || ''}
+              onChange={e => set('amount_paid', Number(e.target.value))}
+              className={`w-full pl-7 pr-4 py-2 rounded-lg border text-sm
+                focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors
+                ${errors.amount_paid ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
+            />
+          </div>
+          {errors.amount_paid && <p className="text-xs text-red-600">{errors.amount_paid}</p>}
+          {prefillBalance && prefillBalance > 0 && (
+            <p className="text-xs text-gray-500">
+              Outstanding balance: {formatPeso(prefillBalance)}
+              <button type="button" onClick={() => set('amount_paid', prefillBalance)}
+                className="ml-2 text-teal-600 hover:underline font-medium">
+                Pay full balance
+              </button>
+            </p>
           )}
         </div>
-        {errors.patient_id && <p className="text-xs text-red-600">{errors.patient_id}</p>}
-      </div>
 
-      {/* Amount */}
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-gray-700">Amount Paid (₱)</label>
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">₱</span>
-          <input
-            type="number"
-            min={0}
-            step={0.01}
-            placeholder="0.00"
-            value={form.amount_paid || ''}
-            onChange={e => set('amount_paid', Number(e.target.value))}
-            className={`w-full pl-7 pr-4 py-2 rounded-lg border text-sm
-              focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors
-              ${errors.amount_paid ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'}`}
-          />
+        {/* Payment method */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">Payment Method</label>
+          <div className="grid grid-cols-4 gap-2">
+            {PAYMENT_METHODS.map(method => (
+              <button key={method.value} type="button"
+                onClick={() => set('payment_method', method.value)}
+                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border text-xs font-medium transition-all
+                  ${form.payment_method === method.value
+                    ? 'bg-teal-700 text-white border-teal-700 shadow-sm'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                {method.icon}
+                {method.label}
+              </button>
+            ))}
+          </div>
         </div>
-        {errors.amount_paid && <p className="text-xs text-red-600">{errors.amount_paid}</p>}
-        {prefillBalance && prefillBalance > 0 && (
-          <p className="text-xs text-gray-500">
-            Outstanding balance: {formatPeso(prefillBalance)}
-            <button
-              type="button"
-              onClick={() => set('amount_paid', prefillBalance)}
-              className="ml-2 text-teal-600 hover:underline font-medium"
-            >
-              Pay full balance
-            </button>
-          </p>
-        )}
-      </div>
 
-      {/* Payment method */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">Payment Method</label>
-        <div className="grid grid-cols-4 gap-2">
-          {PAYMENT_METHODS.map(method => (
-            <button
-              key={method.value}
-              type="button"
-              onClick={() => set('payment_method', method.value)}
-              className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border text-xs font-medium transition-all
-                ${form.payment_method === method.value
-                  ? 'bg-teal-700 text-white border-teal-700 shadow-sm'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-            >
-              {method.icon}
-              {method.label}
-            </button>
-          ))}
+        <Input label="Payment Date" type="date" value={form.payment_date}
+          onChange={e => set('payment_date', e.target.value)} />
+
+        <div className="flex gap-3 pt-1">
+          <Button type="submit" loading={loading} className="flex-1 sm:flex-none">Record Payment</Button>
+          <Button type="button" variant="secondary" onClick={handleCancel}>Cancel</Button>
         </div>
-      </div>
+      </form>
 
-      {/* Date */}
-      <Input
-        label="Payment Date"
-        type="date"
-        value={form.payment_date}
-        onChange={e => set('payment_date', e.target.value)}
+      <UnsavedChangesModal
+        open={showConfirm}
+        onStay={() => setShowConfirm(false)}
+        onLeave={() => { setShowConfirm(false); onCancel(); }}
       />
-
-      <div className="flex gap-3 pt-1">
-        <Button type="submit" loading={loading} className="flex-1 sm:flex-none">Record Payment</Button>
-        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-      </div>
-    </form>
+    </>
   );
 }

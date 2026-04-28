@@ -9,14 +9,12 @@ import { Button } from '@/components/ui/Button';
 import { useAppToast } from '@/app/(dashboard)/layout';
 import { ArrowLeft } from 'lucide-react';
 
-/* -------------------- CONTENT COMPONENT -------------------- */
 function NewAppointmentContent() {
   const router = useRouter();
   const toast = useAppToast();
   const searchParams = useSearchParams();
 
   const prefillPatientId = searchParams.get('patient_id') ?? undefined;
-
   const [clinicId, setClinicId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,16 +22,13 @@ function NewAppointmentContent() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       const { data } = await supabase
         .from('staff')
         .select('clinic_id')
         .eq('auth_user_id', user.id)
         .single();
-
       setClinicId(data?.clinic_id ?? null);
     }
-
     getClinicId();
   }, []);
 
@@ -42,7 +37,7 @@ function NewAppointmentContent() {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => router.back()}
+        onClick={() => router.push('/appointments')}
         className="text-gray-500"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -63,15 +58,12 @@ function NewAppointmentContent() {
               clinicId={clinicId}
               prefillPatientId={prefillPatientId}
               toast={toast}
-              onCancel={() => router.back()}
+              onCancel={() => router.push('/appointments')}
             />
           ) : (
             <div className="space-y-4">
               {[1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  className="h-10 bg-gray-100 animate-pulse rounded-lg"
-                />
+                <div key={i} className="h-10 bg-gray-100 animate-pulse rounded-lg" />
               ))}
             </div>
           )}
@@ -81,17 +73,13 @@ function NewAppointmentContent() {
   );
 }
 
-/* -------------------- DEFAULT EXPORT (WRAPPER) -------------------- */
 export default function NewAppointmentPage() {
   return (
     <Suspense
       fallback={
         <div className="max-w-2xl mx-auto space-y-4">
           {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="h-10 bg-gray-100 animate-pulse rounded-lg"
-            />
+            <div key={i} className="h-10 bg-gray-100 animate-pulse rounded-lg" />
           ))}
         </div>
       }
