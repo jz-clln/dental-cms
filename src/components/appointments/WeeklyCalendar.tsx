@@ -4,10 +4,11 @@ import { useState, useMemo, useRef } from 'react';
 import { Appointment } from '@/types';
 import { formatTime, getPatientName } from '@/lib/utils';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, ChevronRight, LayoutList, GripVertical } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LayoutList, GripVertical, CheckSquare, Square, CheckCheck, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { createClient } from '@/lib/supabase/client';
 
 const SLOT_COLORS: Record<string, string> = {
   Scheduled: 'bg-blue-50  border-blue-200  text-blue-800  hover:bg-blue-100',
@@ -32,8 +33,9 @@ interface WeeklyCalendarProps {
   appointments: Appointment[];
   loading?: boolean;
   onSelectAppointment: (appt: Appointment) => void;
-  /** Parent owns the DB write; return a rejected promise to roll back optimistic update */
   onReschedule?: (apptId: string, newDate: string, newTime: string) => Promise<void>;
+  onBulkUpdated?: () => void;
+  toast?: { success: (m: string) => void; error: (m: string) => void };
 }
 
 function getWeekDates(referenceDate: Date): Date[] {
@@ -56,13 +58,18 @@ export function WeeklyCalendar({
   loading,
   onSelectAppointment,
   onReschedule,
+  onBulkUpdated,
+  toast,
 }: WeeklyCalendarProps) {
   const [referenceDate, setReferenceDate] = useState(new Date());
-  const [view, setView]                   = useState<'week' | 'list'>('week');
+  const [view, setView] = useState<'week' | 'list'>('week');
 
-  // Optimistic local state — mirrors props but can be updated instantly on drop
+  // Bulk selection
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  // Optimistic local state
   const [localAppts, setLocalAppts] = useState<Appointment[]>(appointments);
-  // Keep local in sync when parent refreshes data
   const prevApptsRef = useRef(appointments);
   if (appointments !== prevApptsRef.current) {
     prevApptsRef.current = appointments;
@@ -70,13 +77,13 @@ export function WeeklyCalendar({
   }
 
   // Drag state
-  const [draggingId, setDraggingId]     = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [draggingStatus, setDraggingStatus] = useState<string>('Scheduled');
-  const [dropTarget, setDropTarget]     = useState<string | null>(null); // dateStr being hovered
-  const [saving, setSaving]             = useState<string | null>(null); // apptId being saved
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
 
   const weekDates = useMemo(() => getWeekDates(referenceDate), [referenceDate]);
-  const today     = toDateStr(new Date());
+  const today = toDateStr(new Date());
 
   function prevWeek() {
     const d = new Date(referenceDate);
@@ -102,8 +109,66 @@ export function WeeklyCalendar({
     return map;
   }, [localAppts]);
 
+  // All visible appointments in list view (for select all)
+  const allVisibleIds = useMemo(() => {
+    return weekDates.flatMap(date => (byDate[toDateStr(date)] ?? []).map(a => a.id));
+  }, [weekDates, byDate]);
+
+  const allSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selected.has(id));
+  const someSelected = selected.size > 0;
+
+  function toggleOne(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(allVisibleIds));
+    }
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  // Switch view — clear selection
+  function switchView(v: 'week' | 'list') {
+    setView(v);
+    clearSelection();
+  }
+
+  async function handleBulkUpdate(status: 'Done' | 'Cancelled') {
+    if (selected.size === 0) return;
+    setBulkLoading(true);
+
+    const supabase = createClient();
+    const ids = Array.from(selected);
+
+    const { error } = await supabase
+      .from('appointments')
+      .update({ status })
+      .in('id', ids);
+
+    if (error) {
+      toast?.error(`Failed to update appointments.`);
+    } else {
+      toast?.success(`${ids.length} appointment${ids.length > 1 ? 's' : ''} marked as ${status}.`);
+      clearSelection();
+      onBulkUpdated?.();
+    }
+
+    setBulkLoading(false);
+  }
+
   const weekStart = weekDates[0];
-  const weekEnd   = weekDates[6];
+  const weekEnd = weekDates[6];
   const weekLabel =
     weekStart.toLocaleDateString('en-PH', { month: 'long', day: 'numeric' }) +
     ' – ' +
@@ -131,7 +196,6 @@ export function WeeklyCalendar({
   }
 
   function handleDragLeave(e: React.DragEvent) {
-    // Only clear if leaving the column entirely (not entering a child)
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setDropTarget(null);
     }
@@ -141,29 +205,23 @@ export function WeeklyCalendar({
     e.preventDefault();
     setDropTarget(null);
 
-    const apptId  = e.dataTransfer.getData('apptId');
+    const apptId = e.dataTransfer.getData('apptId');
     const apptTime = e.dataTransfer.getData('apptTime');
     if (!apptId || !onReschedule) return;
 
     const appt = localAppts.find((a) => a.id === apptId);
     if (!appt) return;
-
-    // Same day drop — no-op
     if (appt.appointment_date === newDateStr) return;
 
-    // Optimistic update
     const snapshot = [...localAppts];
     setLocalAppts((prev) =>
-      prev.map((a) =>
-        a.id === apptId ? { ...a, appointment_date: newDateStr } : a
-      )
+      prev.map((a) => a.id === apptId ? { ...a, appointment_date: newDateStr } : a)
     );
 
     setSaving(apptId);
     try {
       await onReschedule(apptId, newDateStr, apptTime);
     } catch {
-      // Roll back on error
       setLocalAppts(snapshot);
     } finally {
       setSaving(null);
@@ -198,14 +256,14 @@ export function WeeklyCalendar({
           <span className="text-sm font-medium text-gray-700 ml-1 hidden sm:inline">{weekLabel}</span>
         </div>
         <div className="flex items-center gap-2">
-          {onReschedule && (
+          {onReschedule && view === 'week' && (
             <span className="text-xs text-gray-400 hidden sm:inline select-none">
               Drag appointments to reschedule
             </span>
           )}
           <div className="flex rounded-lg border border-gray-200 overflow-hidden">
             <button
-              onClick={() => setView('week')}
+              onClick={() => switchView('week')}
               className={cn(
                 'px-3 py-1.5 text-xs font-medium transition-colors',
                 view === 'week' ? 'bg-teal-700 text-white' : 'text-gray-500 hover:bg-gray-50'
@@ -214,7 +272,7 @@ export function WeeklyCalendar({
               Week
             </button>
             <button
-              onClick={() => setView('list')}
+              onClick={() => switchView('list')}
               className={cn(
                 'px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1',
                 view === 'list' ? 'bg-teal-700 text-white' : 'text-gray-500 hover:bg-gray-50'
@@ -235,21 +293,13 @@ export function WeeklyCalendar({
       {view === 'week' && (
         <div className="overflow-x-auto">
           <div className="min-w-[640px]">
-
-            {/* Day headers */}
             <div className="grid grid-cols-7 border-b border-gray-100">
               {weekDates.map((date, i) => {
                 const dateStr = toDateStr(date);
                 const isToday = dateStr === today;
-                const count   = byDate[dateStr]?.length ?? 0;
+                const count = byDate[dateStr]?.length ?? 0;
                 return (
-                  <div
-                    key={i}
-                    className={cn(
-                      'px-2 py-3 text-center border-r border-gray-50 last:border-r-0',
-                      isToday && 'bg-teal-50'
-                    )}
-                  >
+                  <div key={i} className={cn('px-2 py-3 text-center border-r border-gray-50 last:border-r-0', isToday && 'bg-teal-50')}>
                     <p className={cn('text-xs font-medium', isToday ? 'text-teal-700' : 'text-gray-400')}>
                       {DAY_NAMES[date.getDay()]}
                     </p>
@@ -267,13 +317,12 @@ export function WeeklyCalendar({
               })}
             </div>
 
-            {/* Appointment columns */}
             <div className="grid grid-cols-7 min-h-[400px]">
               {weekDates.map((date, i) => {
-                const dateStr  = toDateStr(date);
-                const isToday  = dateStr === today;
+                const dateStr = toDateStr(date);
+                const isToday = dateStr === today;
                 const dayAppts = byDate[dateStr] ?? [];
-                const isOver   = dropTarget === dateStr && draggingId !== null;
+                const isOver = dropTarget === dateStr && draggingId !== null;
 
                 return (
                   <div
@@ -284,17 +333,13 @@ export function WeeklyCalendar({
                     className={cn(
                       'p-2 border-r border-gray-50 last:border-r-0 space-y-1.5 transition-colors duration-150',
                       isToday && 'bg-teal-50/30',
-                      // Drop-target highlight uses the dragged appt's status colour
                       isOver && (DRAG_OVER_COLORS[draggingStatus] ?? 'ring-2 ring-teal-400 bg-teal-50'),
                     )}
                   >
-                    {/* Empty state / drop hint */}
                     {dayAppts.length === 0 && (
                       <div className={cn(
                         'h-full min-h-[80px] flex items-center justify-center rounded-lg transition-all',
-                        isOver
-                          ? 'border-2 border-dashed border-teal-400'
-                          : 'border-2 border-dashed border-transparent'
+                        isOver ? 'border-2 border-dashed border-teal-400' : 'border-2 border-dashed border-transparent'
                       )}>
                         {isOver
                           ? <p className="text-xs text-teal-600 font-medium">Drop here</p>
@@ -303,7 +348,6 @@ export function WeeklyCalendar({
                       </div>
                     )}
 
-                    {/* Drop hint when column has appointments */}
                     {dayAppts.length > 0 && isOver && (
                       <div className="border-2 border-dashed border-teal-400 rounded-lg py-1.5 text-center">
                         <p className="text-xs text-teal-600 font-medium">Drop here</p>
@@ -312,15 +356,13 @@ export function WeeklyCalendar({
 
                     {dayAppts.map((appt) => {
                       const isDragging = draggingId === appt.id;
-                      const isSaving   = saving === appt.id;
-
+                      const isSaving = saving === appt.id;
                       return (
                         <div
                           key={appt.id}
                           draggable={!!onReschedule}
                           onDragStart={onReschedule ? (e) => handleDragStart(e, appt) : undefined}
                           onDragEnd={onReschedule ? handleDragEnd : undefined}
-                          // Distinguish click vs drag: track pointer-down time
                           onPointerDown={() => { (appt as any).__pointerDownAt = Date.now(); }}
                           onClick={() => {
                             const delta = Date.now() - ((appt as any).__pointerDownAt ?? 0);
@@ -333,29 +375,18 @@ export function WeeklyCalendar({
                             'group relative w-full text-left p-2 rounded-lg border text-xs transition-all select-none',
                             SLOT_COLORS[appt.status] ?? SLOT_COLORS.Scheduled,
                             isDragging && 'opacity-40 scale-95 shadow-inner',
-                            isSaving   && 'opacity-60 animate-pulse pointer-events-none',
+                            isSaving && 'opacity-60 animate-pulse pointer-events-none',
                             onReschedule && !isDragging && 'cursor-grab active:cursor-grabbing',
                           )}
                         >
-                          {/* Drag handle hint (shown on hover) */}
                           {onReschedule && (
                             <GripVertical className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 opacity-0 group-hover:opacity-30 transition-opacity" />
                           )}
-
-                          {/* Card content — no nested interactive elements */}
                           <div className="w-full">
-                            <p className="font-semibold leading-tight truncate pr-3">
-                              {getPatientName(appt.patient)}
-                            </p>
-                            <p className="mt-0.5 opacity-75 truncate">
-                              {formatTime(appt.appointment_time)}
-                            </p>
-                            <p className="mt-0.5 opacity-60 truncate text-[10px]">
-                              {appt.treatment_type}
-                            </p>
+                            <p className="font-semibold leading-tight truncate pr-3">{getPatientName(appt.patient)}</p>
+                            <p className="mt-0.5 opacity-75 truncate">{formatTime(appt.appointment_time)}</p>
+                            <p className="mt-0.5 opacity-60 truncate text-[10px]">{appt.treatment_type}</p>
                           </div>
-
-                          {/* Saving spinner overlay */}
                           {isSaving && (
                             <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/60">
                               <svg className="w-3.5 h-3.5 animate-spin text-teal-600" fill="none" viewBox="0 0 24 24">
@@ -377,56 +408,141 @@ export function WeeklyCalendar({
 
       {/* ── LIST VIEW ── */}
       {view === 'list' && (
-        <div className="divide-y divide-gray-50">
-          {weekDates.map((date, i) => {
-            const dateStr  = toDateStr(date);
-            const isToday  = dateStr === today;
-            const dayAppts = byDate[dateStr] ?? [];
-            return (
-              <div key={i}>
-                <div className={cn(
-                  'px-5 py-2 flex items-center gap-3',
-                  isToday ? 'bg-teal-50' : 'bg-gray-50'
-                )}>
-                  <p className={cn('text-sm font-semibold', isToday ? 'text-teal-700' : 'text-gray-500')}>
-                    {FULL_DAY_NAMES[date.getDay()]},{' '}
-                    {date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-                  </p>
-                  {isToday && (
-                    <span className="text-xs bg-teal-700 text-white px-2 py-0.5 rounded-full">Today</span>
+        <>
+          {/* Select all bar */}
+          <div className="flex items-center gap-3 px-5 py-2.5 border-b border-gray-100 bg-gray-50">
+            <button
+              type="button"
+              onClick={toggleAll}
+              className="flex items-center gap-2 text-sm text-gray-600 hover:text-teal-700 transition-colors"
+            >
+              {allSelected
+                ? <CheckSquare className="w-4 h-4 text-teal-700" />
+                : <Square className="w-4 h-4 text-gray-400" />
+              }
+              <span className="text-xs font-medium">
+                {allSelected ? 'Deselect all' : 'Select all'}
+              </span>
+            </button>
+            {someSelected && (
+              <span className="text-xs text-gray-400">
+                {selected.size} selected
+              </span>
+            )}
+          </div>
+
+          <div className="divide-y divide-gray-50">
+            {weekDates.map((date, i) => {
+              const dateStr = toDateStr(date);
+              const isToday = dateStr === today;
+              const dayAppts = byDate[dateStr] ?? [];
+              return (
+                <div key={i}>
+                  <div className={cn('px-5 py-2 flex items-center gap-3', isToday ? 'bg-teal-50' : 'bg-gray-50')}>
+                    <p className={cn('text-sm font-semibold', isToday ? 'text-teal-700' : 'text-gray-500')}>
+                      {FULL_DAY_NAMES[date.getDay()]},{' '}
+                      {date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                    </p>
+                    {isToday && (
+                      <span className="text-xs bg-teal-700 text-white px-2 py-0.5 rounded-full">Today</span>
+                    )}
+                  </div>
+
+                  {dayAppts.length === 0 ? (
+                    <p className="px-5 py-3 text-sm text-gray-300">No appointments</p>
+                  ) : (
+                    dayAppts.map((appt) => {
+                      const isChecked = selected.has(appt.id);
+                      return (
+                        <div
+                          key={appt.id}
+                          className={cn(
+                            'flex items-center gap-3 px-5 py-3.5 transition-colors',
+                            isChecked ? 'bg-teal-50' : 'hover:bg-gray-50'
+                          )}
+                        >
+                          {/* Checkbox */}
+                          <button
+                            type="button"
+                            onClick={() => toggleOne(appt.id)}
+                            className="flex-shrink-0 text-gray-400 hover:text-teal-700 transition-colors"
+                          >
+                            {isChecked
+                              ? <CheckSquare className="w-4 h-4 text-teal-700" />
+                              : <Square className="w-4 h-4" />
+                            }
+                          </button>
+
+                          {/* Row content — clicking opens detail */}
+                          <button
+                            onClick={() => onSelectAppointment(appt)}
+                            className="flex items-center gap-4 flex-1 min-w-0 text-left"
+                          >
+                            <div className="w-16 flex-shrink-0">
+                              <p className="text-sm font-semibold text-gray-900">
+                                {formatTime(appt.appointment_time)}
+                              </p>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {getPatientName(appt.patient)}
+                              </p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {appt.treatment_type}
+                                {appt.dentist?.name ? ` · ${appt.dentist.name}` : ''}
+                              </p>
+                            </div>
+                            <Badge label={appt.status} />
+                          </button>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
-                {dayAppts.length === 0 ? (
-                  <p className="px-5 py-3 text-sm text-gray-300">No appointments</p>
-                ) : (
-                  dayAppts.map((appt) => (
-                    <button
-                      key={appt.id}
-                      onClick={() => onSelectAppointment(appt)}
-                      className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors text-left"
-                    >
-                      <div className="w-16 flex-shrink-0">
-                        <p className="text-sm font-semibold text-gray-900">
-                          {formatTime(appt.appointment_time)}
-                        </p>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {getPatientName(appt.patient)}
-                        </p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {appt.treatment_type}
-                          {appt.dentist?.name ? ` · ${appt.dentist.name}` : ''}
-                        </p>
-                      </div>
-                      <Badge label={appt.status} />
-                    </button>
-                  ))
-                )}
-              </div>
-            );
-          })}
+      {/* ── BULK ACTION BAR ── */}
+      {view === 'list' && someSelected && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-teal-100 bg-teal-700 px-5 py-3
+          flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <CheckCheck className="w-4 h-4 text-teal-200" />
+            <span className="text-sm font-medium text-white">
+              {selected.size} appointment{selected.size > 1 ? 's' : ''} selected
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleBulkUpdate('Done')}
+              disabled={bulkLoading}
+              className="px-3 py-1.5 rounded-lg bg-white text-teal-700 text-xs font-semibold
+                hover:bg-teal-50 transition-colors disabled:opacity-50"
+            >
+              Mark as Done
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkUpdate('Cancelled')}
+              disabled={bulkLoading}
+              className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold
+                border border-teal-500 hover:bg-teal-500 transition-colors disabled:opacity-50"
+            >
+              Mark as Cancelled
+            </button>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="p-1.5 rounded-lg text-teal-200 hover:text-white hover:bg-teal-600 transition-colors"
+              title="Clear selection"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
