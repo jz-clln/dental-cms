@@ -187,6 +187,8 @@ function AppointmentsContent() {
         loading={loading}
         onSelectAppointment={openDetail}
         onReschedule={handleReschedule}
+        toast={toast}
+        onBulkUpdated={() => load()}
       />
 
       <Modal
