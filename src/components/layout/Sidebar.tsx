@@ -77,7 +77,7 @@ export function Sidebar() {
       'flex items-center gap-3 px-4 py-5 border-b border-gray-100',
       !showFull && 'justify-center px-0'
     )}>
-      <AppIcon size="sm" logoUrl={logoUrl} clinicName={clinicName} />
+      <AppIcon size="sm" clinicName={clinicName} />
       {showFull && (
         <div className="min-w-0">
           <p className="text-sm font-bold text-gray-900 leading-tight truncate">{clinicName}</p>
@@ -141,7 +141,7 @@ export function Sidebar() {
           <div className="md:hidden fixed left-0 top-0 h-full w-64 bg-white z-50 shadow-xl flex flex-col">
             <div className="flex items-center justify-between px-4 py-5 border-b border-gray-100">
               <div className="flex items-center gap-3">
-                <AppIcon size="sm" logoUrl={logoUrl} clinicName={clinicName} />
+                <AppIcon size="sm" clinicName={clinicName} />
                 <div>
                   <p className="text-sm font-bold text-gray-900 truncate max-w-[140px]">{clinicName}</p>
                   <p className="text-xs text-gray-400">Clinic Management</p>

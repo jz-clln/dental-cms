@@ -1,6 +1,6 @@
 {
-  "name": "Dental CMS",
-  "short_name": "DentalCMS",
+  "name": "Bitey",
+  "short_name": "Bitey",
   "description": "Clinic management for dental practices",
   "start_url": "/dashboard",
   "display": "standalone",

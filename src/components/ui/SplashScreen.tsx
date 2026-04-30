@@ -55,7 +55,7 @@ export function SplashScreen() {
           animation: !fadeOut ? 'splashIn 0.6s ease-out forwards' : undefined,
         }}
       >
-        <AppIcon size="lg" logoUrl={logoUrl} clinicName={clinicName} />
+        <AppIcon size="lg" clinicName={clinicName} />
         <div className="text-center">
           <p className="text-xl font-bold text-gray-900">{clinicName}</p>
           <p className="text-sm text-gray-400 mt-0.5">Clinic Management System</p>

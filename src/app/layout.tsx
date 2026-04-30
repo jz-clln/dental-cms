@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from 'sonner';
 
 export const metadata: Metadata = {
-  title: 'Dental CMS',
+  title: 'Bitey – Dental CMS',
   description: 'Clinic management system for dental practices',
   manifest: '/manifest.json',
   icons: {
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Dental CMS',
+    title: 'Bitey - Dental Clinic Management System',
   },
 };
 

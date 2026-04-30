@@ -2,7 +2,6 @@
 
 import { useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { AppIcon, ToothIcon } from '@/components/ui/ToothLogo';
 import { Upload, Trash2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -103,7 +102,11 @@ export function LogoUpload({ clinicId, currentLogoUrl, clinicName, onUpdated, to
       <div className="flex items-start gap-5">
         {/* Current logo preview */}
         <div className="flex-shrink-0">
-          <AppIcon size="lg" logoUrl={preview} clinicName={clinicName} />
+          <img
+            src={preview || '/logo.png'}
+            alt="Clinic logo"
+            className="w-[44px] h-[44px] object-contain"
+          />
           <p className="text-xs text-gray-400 text-center mt-1.5">Preview</p>
         </div>
 
