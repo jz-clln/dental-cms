@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { ToothIcon } from '@/components/ui/ToothLogo';
 import {
   Calendar, Package, Receipt, BarChart3,
   UserPlus, CalendarPlus, Plus, LucideIcon,
@@ -128,7 +127,11 @@ function ToothIllustration() {
   return (
     <div className="relative">
       <div className="w-20 h-20 rounded-3xl bg-teal-50 border-2 border-teal-100 flex items-center justify-center">
-        <ToothIcon size={44} className="text-teal-300" />
+        <img
+          src="/logo.png"
+          alt="Clinic logo"
+          className="w-[44px] h-[44px] object-contain"
+          />
       </div>
       {/* Decorative dots */}
       <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-teal-100" />
@@ -188,7 +191,11 @@ function ReportsIllustration() {
 function GenericIllustration() {
   return (
     <div className="w-20 h-20 rounded-3xl bg-gray-50 border-2 border-gray-100 flex items-center justify-center">
-      <ToothIcon size={44} className="text-gray-200" />
+      <img
+          src="/logo.png"
+          alt="Clinic logo"
+          className="w-[44px] h-[44px] object-contain"
+          />
     </div>
   );
 }
