@@ -156,12 +156,12 @@ const BITEY_MESSAGES: Record<BiteyEmotion, string> = {
     "Restock first, then follow up on those missed appointments.",
 
   sleepy:
-    "Quiet one today, doc. No appointments lined up yet.\n" +
+    "Quiet one today, Doc. No appointments lined up yet.\n" +
     "Honestly not a bad time to tackle that admin backlog.\n" +
     "Or just take a breather. You've earned it.",
 
   sad:
-    "Slow week on the billing side, doc.\n" +
+    "Slow week on the billing side, Doc.\n" +
     "No payments have come in yet, which is a little unusual.\n" +
     "Might be worth checking if any invoices are still pending.",
 };
