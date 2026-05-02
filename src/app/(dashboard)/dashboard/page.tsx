@@ -126,22 +126,22 @@ const BITEY_MESSAGES: Record<BiteyEmotion, string> = {
     "Add your first patient and we'll get things moving.",
 
   happy:
-    "Morning, doc! Today's looking pretty steady.\n" +
+    "Morning, Doc! Today's looking pretty steady.\n" +
     "Appointments are on track and nothing needs urgent attention.\n" +
     "A smooth day, so enjoy it while it lasts!",
 
   excited:
-    "Hey doc, revenue is up this week! Nice work.\n" +
+    "Hey Doc, revenue is up this week! Nice work.\n" +
     "You're already ahead of your usual weekly pace.\n" +
     "Keep the bookings coming and finish strong!",
 
   celebrating:
-    "Clean sweep today, doc. Seriously impressive!\n" +
+    "Clean sweep today, Doc. Seriously impressive!\n" +
     "Every patient showed up and every appointment got done.\n" +
     "That's the kind of day worth remembering.",
 
   worried:
-    "Just a heads up, doc. No-shows are a bit high today.\n" +
+    "Just a heads up, Doc. No-shows are a bit high today.\n" +
     "It happens, but it's worth keeping an eye on.\n" +
     "A quick reminder message before appointments could really help.",
 
