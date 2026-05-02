@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -11,7 +11,7 @@ import { AppointmentForm } from '@/components/appointments/AppointmentForm';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useAppToast } from '@/app/(dashboard)/layout';
-import { CalendarPlus } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const STATUS_OPTIONS: AppointmentStatus[] = [
   'Scheduled',
@@ -20,6 +20,32 @@ const STATUS_OPTIONS: AppointmentStatus[] = [
   'No-show',
   'Cancelled',
 ];
+
+/* ── helpers ── */
+function getWeekBounds(anchor: Date): { mon: Date; sun: Date } {
+  const day = anchor.getDay();
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const mon = new Date(anchor);
+  mon.setDate(anchor.getDate() + diffToMon);
+  mon.setHours(0, 0, 0, 0);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  sun.setHours(23, 59, 59, 999);
+  return { mon, sun };
+}
+
+function formatWeekLabel(mon: Date, sun: Date): string {
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  const start = mon.toLocaleDateString('en-US', opts);
+  const end = sun.toLocaleDateString('en-US', { ...opts, year: 'numeric' });
+  return `${start} – ${end}`;
+}
+
+function isSameWeek(a: Date, b: Date): boolean {
+  const { mon: monA } = getWeekBounds(a);
+  const { mon: monB } = getWeekBounds(b);
+  return monA.toDateString() === monB.toDateString();
+}
 
 /* -------------------- CONTENT COMPONENT -------------------- */
 function AppointmentsContent() {
@@ -31,20 +57,30 @@ function AppointmentsContent() {
   const [loading, setLoading]           = useState(true);
   const [clinicId, setClinicId]         = useState<string | null>(null);
 
+  // Week navigation
+  const [selectedWeek, setSelectedWeek] = useState<Date>(new Date());
+
+  const { mon, sun } = useMemo(() => getWeekBounds(selectedWeek), [selectedWeek]);
+  const weekLabel = useMemo(() => formatWeekLabel(mon, sun), [mon, sun]);
+  const isCurrentWeek = useMemo(() => isSameWeek(selectedWeek, new Date()), [selectedWeek]);
+
+  // Filters
   const [filterDentist, setFilterDentist] = useState('');
   const [filterStatus, setFilterStatus]   = useState('');
 
-  const [selectedAppt, setSelectedAppt]   = useState<Appointment | null>(null);
-  const [editingAppt, setEditingAppt]     = useState<Appointment | null>(null);
+  // Modals
+  const [selectedAppt, setSelectedAppt]       = useState<Appointment | null>(null);
+  const [editingAppt, setEditingAppt]         = useState<Appointment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEditModal, setShowEditModal]     = useState(false);
 
   /* ── load ── */
   const load = useCallback(async () => {
+    setLoading(true);
     const supabase = createClient();
 
+    // Fetch clinic ID once (only needed for edit form)
     const { data: { user } } = await supabase.auth.getUser();
-
     if (user) {
       const { data: staffData } = await supabase
         .from('staff')
@@ -54,18 +90,9 @@ function AppointmentsContent() {
       setClinicId(staffData?.clinic_id ?? null);
     }
 
-    const now = new Date();
-    const day = now.getDay();
-    const diffToMon = day === 0 ? -6 : 1 - day;
-
-    const mon = new Date(now);
-    mon.setDate(now.getDate() + diffToMon);
-
-    const sun = new Date(mon);
-    sun.setDate(mon.getDate() + 6);
-
-    const weekStart = mon.toISOString().split('T')[0];
-    const weekEnd   = sun.toISOString().split('T')[0];
+    const { mon: weekMon, sun: weekSun } = getWeekBounds(selectedWeek);
+    const weekStart = weekMon.toISOString().split('T')[0];
+    const weekEnd   = weekSun.toISOString().split('T')[0];
 
     let query = supabase
       .from('appointments')
@@ -86,10 +113,11 @@ function AppointmentsContent() {
     setAppointments((apptRes.data ?? []) as Appointment[]);
     setDentists((dentistRes.data ?? []) as Dentist[]);
     setLoading(false);
-  }, [filterDentist, filterStatus]);
+  }, [filterDentist, filterStatus, selectedWeek]);
 
   useEffect(() => { load(); }, [load]);
 
+  // Open detail modal if ?id= is in URL
   useEffect(() => {
     const id = searchParams.get('id');
     if (id && appointments.length > 0) {
@@ -100,6 +128,27 @@ function AppointmentsContent() {
       }
     }
   }, [searchParams, appointments]);
+
+  /* ── week navigation ── */
+  function goToPrevWeek() {
+    setSelectedWeek((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() - 7);
+      return d;
+    });
+  }
+
+  function goToNextWeek() {
+    setSelectedWeek((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + 7);
+      return d;
+    });
+  }
+
+  function goToToday() {
+    setSelectedWeek(new Date());
+  }
 
   /* ── reschedule (drag-drop) ── */
   const handleReschedule = useCallback(
@@ -113,12 +162,10 @@ function AppointmentsContent() {
 
       if (error) {
         toast.error('Failed to reschedule appointment. Please try again.');
-        throw error; // tells WeeklyCalendar to roll back optimistic update
+        throw error;
       }
 
       toast.success('Appointment rescheduled successfully.');
-
-      // Silently re-fetch so parent state stays in sync (no loading flash)
       load();
     },
     [load, toast],
@@ -136,11 +183,15 @@ function AppointmentsContent() {
     setShowEditModal(true);
   }
 
+  const hasFilters = filterDentist || filterStatus;
+
   return (
     <div className="space-y-5">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 justify-between">
-        <div className="flex flex-wrap gap-3">
+
+        {/* Left: filters */}
+        <div className="flex flex-wrap gap-3 items-center">
           <select
             value={filterDentist}
             onChange={(e) => setFilterDentist(e.target.value)}
@@ -163,7 +214,7 @@ function AppointmentsContent() {
             ))}
           </select>
 
-          {(filterDentist || filterStatus) && (
+          {hasFilters && (
             <Button
               variant="ghost"
               size="sm"
@@ -174,14 +225,48 @@ function AppointmentsContent() {
           )}
         </div>
 
-        <Link href="/appointments/new">
-          <Button size="sm">
-            <CalendarPlus className="w-4 h-4" />
-            New Appointment
-          </Button>
-        </Link>
+        {/* Right: week nav + new appointment */}
+        <div className="flex items-center gap-2">
+          {/* Week navigation */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={goToPrevWeek}
+              className="p-1.5 rounded-md hover:bg-gray-100 transition-colors"
+              aria-label="Previous week"
+            >
+              <ChevronLeft className="w-4 h-4 text-gray-600" />
+            </button>
+
+            <span className="text-sm font-medium text-gray-700 px-2 min-w-[160px] text-center">
+              {weekLabel}
+            </span>
+
+            <button
+              onClick={goToNextWeek}
+              className="p-1.5 rounded-md hover:bg-gray-100 transition-colors"
+              aria-label="Next week"
+            >
+              <ChevronRight className="w-4 h-4 text-gray-600" />
+            </button>
+          </div>
+
+          {/* Today button — only show when not on current week */}
+          {!isCurrentWeek && (
+            <Button variant="ghost" size="sm" onClick={goToToday}>
+              Today
+            </Button>
+          )}
+
+          <Link href="/appointments/new">
+            <Button size="sm">
+              <CalendarPlus className="w-4 h-4" />
+              New Appointment
+            </Button>
+          </Link>
+        </div>
       </div>
 
+      {/* Calendar */}
       <WeeklyCalendar
         appointments={appointments}
         loading={loading}
@@ -191,6 +276,7 @@ function AppointmentsContent() {
         onBulkUpdated={() => load()}
       />
 
+      {/* Detail Modal */}
       <Modal
         open={showDetailModal}
         onClose={() => { setShowDetailModal(false); setSelectedAppt(null); }}
@@ -207,6 +293,7 @@ function AppointmentsContent() {
         )}
       </Modal>
 
+      {/* Edit Modal */}
       <Modal
         open={showEditModal}
         onClose={() => { setShowEditModal(false); setEditingAppt(null); }}
