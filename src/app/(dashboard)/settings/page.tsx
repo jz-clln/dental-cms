@@ -18,17 +18,19 @@ import { cn } from '@/lib/utils';
 
 type Tab = 'clinic' | 'dentists' | 'staff' | 'password';
 
-const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: 'clinic',   label: 'Clinic Info', icon: Building2 },
-  { id: 'dentists', label: 'Dentists',    icon: Stethoscope },
-  { id: 'staff',    label: 'Staff',       icon: Users },
-  { id: 'password', label: 'Password',    icon: Lock },
-];
+const TABS = [
+  { id: 'clinic', label: 'Clinic Info', icon: Building2 },
+  { id: 'dentists', label: 'Dentists', icon: Stethoscope },
+  { id: 'staff', label: 'Staff', icon: Users },
+  { id: 'password', label: 'Password', icon: Lock },
+] as const;
 
 export default function SettingsPage() {
   const toast = useAppToast();
+
   const [activeTab, setActiveTab] = useState<Tab>('clinic');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [clinic, setClinic] = useState<Clinic | null>(null);
   const [dentists, setDentists] = useState<Dentist[]>([]);
@@ -37,35 +39,95 @@ export default function SettingsPage() {
   const [clinicId, setClinicId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    setLoading(true);
+    setError(null);
 
-    const { data: staffData } = await supabase
-      .from('staff').select('*').eq('auth_user_id', user.id).single();
-    if (!staffData) return;
+    try {
+      const supabase = createClient();
 
-    setCurrentStaff(staffData as Staff);
-    setClinicId(staffData.clinic_id);
+      // 1. Get user
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    const [clinicRes, dentistsRes, staffRes] = await Promise.all([
-      supabase.from('clinics').select('*').eq('id', staffData.clinic_id).single(),
-      supabase.from('dentists').select('*').eq('clinic_id', staffData.clinic_id).order('name'),
-      supabase.from('staff').select('*').eq('clinic_id', staffData.clinic_id).order('full_name'),
-    ]);
+      if (userError || !user) {
+        throw new Error('User not authenticated');
+      }
 
-    setClinic(clinicRes.data as Clinic);
-    setDentists((dentistsRes.data ?? []) as Dentist[]);
-    setStaff((staffRes.data ?? []) as Staff[]);
-    setLoading(false);
+      // 2. Get staff record
+      const { data: staffData, error: staffError } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (staffError || !staffData) {
+        throw new Error('Staff record not found');
+      }
+
+      setCurrentStaff(staffData);
+      setClinicId(staffData.clinic_id);
+
+      // 3. Fetch all related data
+      const [clinicRes, dentistsRes, staffRes] = await Promise.all([
+        supabase
+          .from('clinics')
+          .select('*')
+          .eq('id', staffData.clinic_id)
+          .single(),
+
+        supabase
+          .from('dentists')
+          .select('*')
+          .eq('clinic_id', staffData.clinic_id)
+          .order('name'),
+
+        supabase
+          .from('staff')
+          .select('*')
+          .eq('clinic_id', staffData.clinic_id)
+          .order('full_name'),
+      ]);
+
+      if (clinicRes.error) throw clinicRes.error;
+      if (dentistsRes.error) throw dentistsRes.error;
+      if (staffRes.error) throw staffRes.error;
+
+      setClinic(clinicRes.data);
+      setDentists(dentistsRes.data ?? []);
+      setStaff(staffRes.data ?? []);
+    } catch (err: any) {
+      console.error('Settings load error:', err);
+      setError(err.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // 🔴 ERROR STATE
+  if (error) {
+    return (
+      <div className="max-w-2xl mx-auto p-6 text-center">
+        <p className="text-red-500 font-medium">{error}</p>
+        <button
+          onClick={load}
+          className="mt-4 px-4 py-2 bg-gray-900 text-white rounded-lg"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
 
-      {/* Tab navigation */}
+      {/* Tabs */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-1.5 flex gap-1 overflow-x-auto">
         {TABS.map(tab => (
           <button
@@ -74,74 +136,65 @@ export default function SettingsPage() {
             className={cn(
               'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all flex-1 justify-center whitespace-nowrap',
               activeTab === tab.id
-                ? 'bg-teal-700 text-white shadow-sm'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                ? 'bg-teal-700 text-white'
+                : 'text-gray-500 hover:bg-gray-100'
             )}
           >
-            <tab.icon className="w-4 h-4 flex-shrink-0" />
+            <tab.icon className="w-4 h-4" />
             {tab.label}
           </button>
         ))}
       </div>
 
+      {/* Loading */}
       {loading ? (
         <SkeletonCard />
       ) : (
         <>
-          {/* Clinic Info */}
+          {/* Clinic */}
           {activeTab === 'clinic' && clinic && clinicId && (
             <div className="space-y-4">
-
-              {/* Logo upload */}
               <Card>
                 <CardHeader>
-                  <h3 className="font-semibold text-gray-900">Clinic Logo</h3>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    Your logo appears in the sidebar, login page, and printed schedules.
-                  </p>
+                  <h3 className="font-semibold">Clinic Logo</h3>
                 </CardHeader>
                 <CardBody>
                   <LogoUpload
                     clinicId={clinicId}
                     currentLogoUrl={(clinic as any).logo_url ?? null}
                     clinicName={clinic.name}
-                    onUpdated={url => setClinic(prev => prev ? { ...prev, logo_url: url } as any : prev)}
+                    onUpdated={url =>
+                      setClinic(prev =>
+                        prev ? { ...prev, logo_url: url } as any : prev
+                      )
+                    }
                     toast={toast}
                   />
                 </CardBody>
               </Card>
 
-              {/* Clinic info form */}
               <Card>
                 <CardHeader>
-                  <h3 className="font-semibold text-gray-900">Clinic Information</h3>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    This information appears on receipts and documents.
-                  </p>
+                  <h3 className="font-semibold">Clinic Information</h3>
                 </CardHeader>
                 <CardBody>
                   <ClinicInfoForm
                     clinic={clinic}
-                    onSuccess={updated => setClinic(updated)}
+                    onSuccess={setClinic}
                     toast={toast}
                   />
                 </CardBody>
               </Card>
 
-              {/* Help & Tutorial */}
               <Card>
                 <CardHeader>
-                  <h3 className="font-semibold text-gray-900">Help</h3>
+                  <h3 className="font-semibold">Help</h3>
                 </CardHeader>
                 <CardBody className="space-y-3">
                   <ReplayTutorialButton />
-                  <p className="text-xs text-gray-400">
-                    Replays the onboarding tour that shows how to use each section of the app.
-                  </p>
                 </CardBody>
               </Card>
 
-              {/* Data backup notice */}
               <DataBackupNotice />
             </div>
           )}
@@ -150,10 +203,7 @@ export default function SettingsPage() {
           {activeTab === 'dentists' && clinicId && (
             <Card>
               <CardHeader>
-                <h3 className="font-semibold text-gray-900">Dentists</h3>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  Manage your dental professionals and their schedules.
-                </p>
+                <h3 className="font-semibold">Dentists</h3>
               </CardHeader>
               <CardBody>
                 <DentistsPanel
@@ -170,10 +220,7 @@ export default function SettingsPage() {
           {activeTab === 'staff' && clinicId && currentStaff && (
             <Card>
               <CardHeader>
-                <h3 className="font-semibold text-gray-900">Staff Accounts</h3>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  Manage who has access to this clinic's system.
-                </p>
+                <h3 className="font-semibold">Staff</h3>
               </CardHeader>
               <CardBody>
                 <StaffPanel
@@ -191,10 +238,7 @@ export default function SettingsPage() {
           {activeTab === 'password' && (
             <Card>
               <CardHeader>
-                <h3 className="font-semibold text-gray-900">Change Password</h3>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  Update your login password. You will not be logged out.
-                </p>
+                <h3 className="font-semibold">Change Password</h3>
               </CardHeader>
               <CardBody>
                 <ChangePasswordForm toast={toast} />
