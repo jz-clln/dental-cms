@@ -121,44 +121,44 @@ function detectNewUser(stats: Stats, activity: ActivityItem[]): boolean {
 // Each message is 3 lines: greeting | situation | suggestion
 const BITEY_MESSAGES: Record<BiteyEmotion, string> = {
   new:
-    "Oh, a brand new clinic — welcome!\n" +
-    "It's a little quiet in here, but that's totally fine.\n" +
-    "Start by adding your first patient and we'll get things going.",
+    "Oh, a brand new clinic! Welcome.\n" +
+    "It's a little quiet in here right now, but that's totally fine.\n" +
+    "Add your first patient and we'll get things moving.",
 
   happy:
     "Morning, doc! Today's looking pretty steady.\n" +
     "Appointments are on track and nothing needs urgent attention.\n" +
-    "A smooth day — enjoy it while it lasts!",
+    "A smooth day, so enjoy it while it lasts!",
 
   excited:
-    "Hey doc, revenue is up this week — nice work!\n" +
+    "Hey doc, revenue is up this week! Nice work.\n" +
     "You're already ahead of your usual weekly pace.\n" +
     "Keep the bookings coming and finish strong!",
 
   celebrating:
-    "Clean sweep today, doc — seriously impressive!\n" +
+    "Clean sweep today, doc. Seriously impressive!\n" +
     "Every patient showed up and every appointment got done.\n" +
     "That's the kind of day worth remembering.",
 
   worried:
-    "Just a heads up, doc — no-shows are a bit high today.\n" +
+    "Just a heads up, doc. No-shows are a bit high today.\n" +
     "It happens, but it's worth keeping an eye on.\n" +
     "A quick reminder message before appointments could really help.",
 
   shocked:
-    "Doc, a couple of supplies are running low — just noticed!\n" +
+    "Doc, a couple of supplies are running low! Just noticed.\n" +
     "Nothing's run out yet, but you're getting close.\n" +
     "Best to reorder now before it becomes a problem mid-treatment.",
 
   panicked:
     "Doc, two things need your attention right now.\n" +
     "You've got low stock and some patients didn't show up today.\n" +
-    "Restock first, then follow up with those missed appointments.",
+    "Restock first, then follow up on those missed appointments.",
 
   sleepy:
-    "Quiet one today, doc — no appointments lined up yet.\n" +
+    "Quiet one today, doc. No appointments lined up yet.\n" +
     "Honestly not a bad time to tackle that admin backlog.\n" +
-    "Or just take a breather — you've earned it.",
+    "Or just take a breather. You've earned it.",
 
   sad:
     "Slow week on the billing side, doc.\n" +
