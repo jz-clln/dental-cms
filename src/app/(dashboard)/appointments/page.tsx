@@ -253,6 +253,8 @@ function AppointmentsContent() {
         onReschedule={handleReschedule}
         toast={toast}
         onBulkUpdated={() => load()}
+        referenceDate={selectedWeek}
+        onWeekChange={(d) => setSelectedWeek(d)}
       />
 
       {/* Detail Modal */}

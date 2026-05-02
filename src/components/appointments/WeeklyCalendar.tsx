@@ -36,6 +36,9 @@ interface WeeklyCalendarProps {
   onReschedule?: (apptId: string, newDate: string, newTime: string) => Promise<void>;
   onBulkUpdated?: () => void;
   toast?: { success: (m: string) => void; error: (m: string) => void };
+  // Lifted state — parent controls which week is shown
+  referenceDate: Date;
+  onWeekChange: (newDate: Date) => void;
 }
 
 function getWeekDates(referenceDate: Date): Date[] {
@@ -60,8 +63,9 @@ export function WeeklyCalendar({
   onReschedule,
   onBulkUpdated,
   toast,
+  referenceDate,
+  onWeekChange,
 }: WeeklyCalendarProps) {
-  const [referenceDate, setReferenceDate] = useState(new Date());
   const [view, setView] = useState<'week' | 'list'>('week');
 
   // Bulk selection
@@ -88,14 +92,14 @@ export function WeeklyCalendar({
   function prevWeek() {
     const d = new Date(referenceDate);
     d.setDate(d.getDate() - 7);
-    setReferenceDate(d);
+    onWeekChange(d);
   }
   function nextWeek() {
     const d = new Date(referenceDate);
     d.setDate(d.getDate() + 7);
-    setReferenceDate(d);
+    onWeekChange(d);
   }
-  function goToday() { setReferenceDate(new Date()); }
+  function goToday() { onWeekChange(new Date()); }
 
   const byDate = useMemo(() => {
     const map: Record<string, Appointment[]> = {};
@@ -109,7 +113,6 @@ export function WeeklyCalendar({
     return map;
   }, [localAppts]);
 
-  // All visible appointments in list view (for select all)
   const allVisibleIds = useMemo(() => {
     return weekDates.flatMap(date => (byDate[toDateStr(date)] ?? []).map(a => a.id));
   }, [weekDates, byDate]);
@@ -127,18 +130,12 @@ export function WeeklyCalendar({
   }
 
   function toggleAll() {
-    if (allSelected) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(allVisibleIds));
-    }
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(allVisibleIds));
   }
 
-  function clearSelection() {
-    setSelected(new Set());
-  }
+  function clearSelection() { setSelected(new Set()); }
 
-  // Switch view — clear selection
   function switchView(v: 'week' | 'list') {
     setView(v);
     clearSelection();
@@ -210,8 +207,7 @@ export function WeeklyCalendar({
     if (!apptId || !onReschedule) return;
 
     const appt = localAppts.find((a) => a.id === apptId);
-    if (!appt) return;
-    if (appt.appointment_date === newDateStr) return;
+    if (!appt || appt.appointment_date === newDateStr) return;
 
     const snapshot = [...localAppts];
     setLocalAppts((prev) =>
@@ -409,7 +405,6 @@ export function WeeklyCalendar({
       {/* ── LIST VIEW ── */}
       {view === 'list' && (
         <>
-          {/* Select all bar */}
           <div className="flex items-center gap-3 px-5 py-2.5 border-b border-gray-100 bg-gray-50">
             <button
               type="button"
@@ -425,9 +420,7 @@ export function WeeklyCalendar({
               </span>
             </button>
             {someSelected && (
-              <span className="text-xs text-gray-400">
-                {selected.size} selected
-              </span>
+              <span className="text-xs text-gray-400">{selected.size} selected</span>
             )}
           </div>
 
@@ -461,7 +454,6 @@ export function WeeklyCalendar({
                             isChecked ? 'bg-teal-50' : 'hover:bg-gray-50'
                           )}
                         >
-                          {/* Checkbox */}
                           <button
                             type="button"
                             onClick={() => toggleOne(appt.id)}
@@ -472,8 +464,6 @@ export function WeeklyCalendar({
                               : <Square className="w-4 h-4" />
                             }
                           </button>
-
-                          {/* Row content — clicking opens detail */}
                           <button
                             onClick={() => onSelectAppointment(appt)}
                             className="flex items-center gap-4 flex-1 min-w-0 text-left"
