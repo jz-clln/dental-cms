@@ -227,28 +227,7 @@ function AppointmentsContent() {
 
         {/* Right: week nav + new appointment */}
         <div className="flex items-center gap-2">
-          {/* Week navigation */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={goToPrevWeek}
-              className="p-1.5 rounded-md hover:bg-gray-100 transition-colors"
-              aria-label="Previous week"
-            >
-              <ChevronLeft className="w-4 h-4 text-gray-600" />
-            </button>
 
-            <span className="text-sm font-medium text-gray-700 px-2 min-w-[160px] text-center">
-              {weekLabel}
-            </span>
-
-            <button
-              onClick={goToNextWeek}
-              className="p-1.5 rounded-md hover:bg-gray-100 transition-colors"
-              aria-label="Next week"
-            >
-              <ChevronRight className="w-4 h-4 text-gray-600" />
-            </button>
-          </div>
 
           {/* Today button — only show when not on current week */}
           {!isCurrentWeek && (
