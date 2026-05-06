@@ -24,6 +24,8 @@ interface Stats {
   lowStockAlerts: number;
   revenueThisWeek: number;
   revenueAverage: number;
+  // Bug fix #3: store actual daily revenue for the bar chart
+  dailyRevenue: number[];
 }
 
 interface DashboardState {
@@ -45,14 +47,17 @@ interface BiteyState {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+const INITIAL_STATS: Stats = {
+  todaysAppointments: 0,
+  totalPatients: 0,
+  lowStockAlerts: 0,
+  revenueThisWeek: 0,
+  revenueAverage: 0,
+  dailyRevenue: [0, 0, 0, 0, 0, 0, 0],
+};
+
 const INITIAL_STATE: DashboardState = {
-  stats: {
-    todaysAppointments: 0,
-    totalPatients: 0,
-    lowStockAlerts: 0,
-    revenueThisWeek: 0,
-    revenueAverage: 0,
-  },
+  stats: INITIAL_STATS,
   appointments: [],
   activity: [],
   loading: true,
@@ -106,19 +111,176 @@ function getCurrentTime24h(): string {
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 }
 
-// Detect new user: no patients, no payments, no activity at all
+// Bug fix #2 (detectNewUser): use totalPatients only — a clinic that doesn't
+// bill through the app would falsely look "new" if we also check revenue.
 function detectNewUser(stats: Stats, activity: ActivityItem[]): boolean {
-  return (
-    stats.totalPatients === 0 &&
-    stats.revenueThisWeek === 0 &&
-    stats.revenueAverage === 0 &&
-    activity.length === 0
+  return stats.totalPatients === 0 && activity.length === 0;
+}
+
+// Bug fix #3: compute daily revenue array (Mon=0 … Sun=6) from payment rows
+function computeDailyRevenue(
+  payments: { amount_paid: number; payment_date: string }[],
+  weekStart: string,
+): number[] {
+  const daily = [0, 0, 0, 0, 0, 0, 0];
+  const base = new Date(weekStart);
+  payments.forEach(p => {
+    const d = new Date(p.payment_date);
+    const idx = Math.round((d.getTime() - base.getTime()) / 86_400_000);
+    if (idx >= 0 && idx < 7) daily[idx] += p.amount_paid ?? 0;
+  });
+  return daily;
+}
+
+// ─── Data fetching helpers ────────────────────────────────────────────────────
+
+// Performance: split into three focused fetchers so we can reason about each
+// independently and avoid loading a single massive function.
+
+async function fetchStats(supabase: ReturnType<typeof createClient>, clinicId: string) {
+  const today = getTodayString();
+  const { weekStart, weekEnd } = getWeekRange();
+  const { pastStart, pastEnd } = getPast4WeeksRange();
+
+  const [apptToday, patients, inventory, payments, pastPayments] = await Promise.all([
+    supabase
+      .from('appointments')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .eq('appointment_date', today),
+
+    supabase
+      .from('patients')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .eq('archived', false),
+
+    supabase
+      .from('inventory_items')
+      .select('quantity, reorder_level')
+      .eq('clinic_id', clinicId),
+
+    supabase
+      .from('payments')
+      .select('amount_paid, payment_date')
+      .eq('clinic_id', clinicId)
+      .gte('payment_date', weekStart)
+      .lte('payment_date', weekEnd),
+
+    supabase
+      .from('payments')
+      .select('amount_paid, payment_date')
+      .eq('clinic_id', clinicId)
+      .gte('payment_date', pastStart)
+      .lte('payment_date', pastEnd),
+  ]);
+
+  const lowStock = (inventory.data ?? []).filter(
+    i => i.quantity <= i.reorder_level,
+  ).length;
+
+  const weekPayments = payments.data ?? [];
+  const revenue = weekPayments.reduce((sum, p) => sum + (p.amount_paid ?? 0), 0);
+  const dailyRevenue = computeDailyRevenue(weekPayments, weekStart);
+
+  // Bug fix #1: only average over weeks that actually have data (≥1 payment),
+  // capped at 4. Dividing by 4 always understates the average for new clinics.
+  const weeklyTotals: Record<string, number> = {};
+  (pastPayments.data ?? []).forEach(p => {
+    const d = new Date(p.payment_date);
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const mon = new Date(d);
+    mon.setDate(d.getDate() + diff);
+    const key = mon.toISOString().split('T')[0];
+    weeklyTotals[key] = (weeklyTotals[key] ?? 0) + (p.amount_paid ?? 0);
+  });
+  const weekValues = Object.values(weeklyTotals);
+  const revenueAverage =
+    weekValues.length > 0
+      ? weekValues.reduce((s, v) => s + v, 0) / weekValues.length  // ← fixed divisor
+      : 0;
+
+  return {
+    todaysAppointments: apptToday.count ?? 0,
+    totalPatients: patients.count ?? 0,
+    lowStockAlerts: lowStock,
+    revenueThisWeek: revenue,
+    revenueAverage,
+    dailyRevenue,
+  } satisfies Stats;
+}
+
+async function fetchAppointments(supabase: ReturnType<typeof createClient>, clinicId: string) {
+  const today = getTodayString();
+  const { data } = await supabase
+    .from('appointments')
+    .select('*, patient:patients(*), dentist:dentists(*)')
+    .eq('clinic_id', clinicId)
+    .eq('appointment_date', today)
+    .order('appointment_time');
+  return (data ?? []) as Appointment[];
+}
+
+async function fetchActivity(supabase: ReturnType<typeof createClient>, clinicId: string) {
+  // Performance: run the three activity queries in parallel (unchanged logic,
+  // just isolated here so fetchStats can also run in parallel with this).
+  const [recentAppts, recentPatients, recentPayments] = await Promise.all([
+    supabase
+      .from('appointments')
+      .select('id, created_at, treatment_type, patient:patients(first_name, last_name)')
+      .eq('clinic_id', clinicId)
+      .order('created_at', { ascending: false })
+      .limit(5),
+
+    supabase
+      .from('patients')
+      .select('id, created_at, first_name, last_name')
+      .eq('clinic_id', clinicId)
+      .eq('archived', false)
+      .order('created_at', { ascending: false })
+      .limit(3),
+
+    supabase
+      .from('payments')
+      .select('id, created_at, amount_paid, patient:patients(first_name, last_name)')
+      .eq('clinic_id', clinicId)
+      .order('created_at', { ascending: false })
+      .limit(3),
+  ]);
+
+  const items: ActivityItem[] = [];
+  (recentAppts.data ?? []).forEach(a =>
+    items.push({
+      id: `appt-${a.id}`,
+      type: 'appointment',
+      description: `Appointment — ${getPatientName(a.patient as any)} for ${a.treatment_type}`,
+      timestamp: a.created_at,
+    }),
   );
+  (recentPatients.data ?? []).forEach(p =>
+    items.push({
+      id: `pat-${p.id}`,
+      type: 'patient',
+      description: `New patient — ${getPatientName(p)}`,
+      timestamp: p.created_at,
+    }),
+  );
+  (recentPayments.data ?? []).forEach(p =>
+    items.push({
+      id: `pay-${p.id}`,
+      type: 'payment',
+      description: `Payment — ${getPatientName(p.patient as any)} paid ${formatPeso(p.amount_paid)}`,
+      timestamp: p.created_at,
+    }),
+  );
+
+  items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return items.slice(0, 8);
 }
 
 // ─── Bitey Logic ──────────────────────────────────────────────────────────────
 
-// Each message is 3 lines: greeting | situation | suggestion
 const BITEY_MESSAGES: Record<BiteyEmotion, string> = {
   new:
     "Oh, a brand new clinic! Welcome.\n" +
@@ -136,27 +298,29 @@ const BITEY_MESSAGES: Record<BiteyEmotion, string> = {
     "Keep the bookings coming and finish strong!",
 
   celebrating:
-    "Clean sweep today, Doc - Seriously impressive!\n" +
+    "Clean sweep today, Doc — seriously impressive!\n" +
     "Every patient showed up and every appointment got done.\n" +
     "That's the kind of day worth remembering.",
 
-  worried:
-    "Just a heads up, Doc - No-shows are a bit high today.\n" +
-    "It happens, but it's worth keeping an eye on.\n" +
+  // Bug fix (swapped): shocked = high no-shows
+  shocked:
+    "Doc, a lot of patients didn't show up today!\n" +
+    "The no-show rate is higher than usual — worth keeping track of.\n" +
     "A quick reminder message before appointments could really help.",
 
-  shocked:
-    "Doc, a couple of supplies are running low! Just noticed.\n" +
-    "Nothing's run out yet, but you're getting close.\n" +
-    "Best to reorder now before it becomes a problem mid-treatment.",
-
+  // Bug fix (swapped): panicked = low inventory
   panicked:
-    "Doc, two things need your attention right now.\n" +
-    "You've got low stock and some patients didn't show up today.\n" +
-    "Restock first, then follow up on those missed appointments.",
+    "Doc, your inventory is running low on some essential supplies!\n" +
+    "Please restock as soon as possible to avoid mid-treatment disruptions.\n" +
+    "You might want to reorder now before it becomes a real problem.",
+
+  worried:
+    "Just a heads up, Doc — things look a little off today.\n" +
+    "Both no-shows and stock levels need your attention.\n" +
+    "Take care of both and the rest of the day should smooth out.",
 
   sleepy:
-    "Quiet one today, Doc - No appointments lined up yet.\n" +
+    "Quiet one today, Doc — No appointments lined up yet.\n" +
     "Honestly not a bad time to tackle that admin backlog.\n" +
     "Or just take a breather. You've earned it.",
 
@@ -180,17 +344,78 @@ function deriveBiteyState(
   const doneCount = appointments.filter(a => a.status === 'Done').length;
   const total = appointments.length;
   const noShowRate = total > 0 ? noShowCount / total : 0;
+  const hasLowStock = stats.lowStockAlerts > 0;
+  const hasHighNoShows = total > 0 && noShowRate >= 0.3;
 
+  // Bug fix #4: simplified & corrected priority chain.
+  // worried = both problems at once (new dedicated state)
+  // panicked = low inventory only
+  // shocked  = high no-shows only
   let emotion: BiteyEmotion = 'happy';
-  if (stats.lowStockAlerts > 0 && total > 0)                          emotion = 'panicked';
-  else if (stats.lowStockAlerts > 0)                                   emotion = 'shocked';
-  else if (total > 0 && noShowRate >= 0.3)                             emotion = 'worried';
-  else if (total === 0 && time >= '11:00')                             emotion = 'sleepy';
-  else if (total > 0 && doneCount === total && noShowCount === 0)      emotion = 'celebrating';
-  else if (stats.revenueThisWeek > stats.revenueAverage)              emotion = 'excited';
-  else if (stats.revenueThisWeek === 0 && time >= '12:00')            emotion = 'sad';
+  if (hasLowStock && hasHighNoShows)                                   emotion = 'worried';
+  else if (hasLowStock)                                                emotion = 'panicked';
+  else if (hasHighNoShows)                                             emotion = 'shocked';
+  else if (total === 0)                                               emotion = 'sleepy';
+  else if (total > 0 && doneCount === total && noShowCount === 0)     emotion = 'celebrating';
+  else if (stats.revenueThisWeek > stats.revenueAverage && stats.revenueAverage > 0) emotion = 'excited'; // guard against avg=0
+  else if (stats.revenueThisWeek === 0 && time >= '12:00')           emotion = 'sad';
 
   return { emotion, message: BITEY_MESSAGES[emotion], isNewUser: false };
+}
+
+// ─── Pull-to-refresh ─────────────────────────────────────────────────────────
+
+const PTR_THRESHOLD = 72; // px of overscroll needed to trigger — also used in JSX indicator opacity
+const PTR_MAX      = 96; // px max rubber-band pull distance shown
+
+function usePullToRefresh(onRefresh: () => void) {
+  const [pullY, setPullY]       = useState(0);   // 0-PTR_MAX, drives indicator height
+  const [triggered, setTriggered] = useState(false);
+  const startY  = useRef<number | null>(null);
+  const pulling = useRef(false);
+
+  useEffect(() => {
+    const el = document.documentElement;
+
+    const onTouchStart = (e: TouchEvent) => {
+      // Only begin a pull when the page is scrolled to the very top
+      if (el.scrollTop > 0) return;
+      startY.current = e.touches[0].clientY;
+      pulling.current = true;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!pulling.current || startY.current === null) return;
+      const delta = e.touches[0].clientY - startY.current;
+      if (delta <= 0) { setPullY(0); return; }
+      // Rubber-band: pull feels heavier the further you go
+      const rubber = Math.min(PTR_MAX, delta * 0.45);
+      setPullY(rubber);
+    };
+
+    const onTouchEnd = () => {
+      if (!pulling.current) return;
+      pulling.current = false;
+      if (pullY >= PTR_THRESHOLD) {
+        setTriggered(true);
+        onRefresh();
+        setTimeout(() => setTriggered(false), 1000);
+      }
+      setPullY(0);
+      startY.current = null;
+    };
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove',  onTouchMove,  { passive: true });
+    window.addEventListener('touchend',   onTouchEnd);
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove',  onTouchMove);
+      window.removeEventListener('touchend',   onTouchEnd);
+    };
+  }, [onRefresh, pullY]);
+
+  return { pullY, triggered };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -205,7 +430,6 @@ function BiteyCard({ bitey, stats, appointments }: {
   const noShowCount = appointments.filter(a => a.status === 'No-show').length;
   const total = appointments.length;
 
-  // Fixed badge — does NOT change with emotion (update #1)
   const badge = {
     bg: 'bg-emerald-500/20',
     text: 'text-emerald-300',
@@ -223,7 +447,6 @@ function BiteyCard({ bitey, stats, appointments }: {
       />
 
       <div className="relative flex items-end gap-0">
-        {/* Bitey image */}
         <div className="relative flex-shrink-0 w-[120px] h-[130px] self-end">
           <Image
             src={`/bitey/${bitey.emotion}.png`}
@@ -234,7 +457,6 @@ function BiteyCard({ bitey, stats, appointments }: {
           />
         </div>
 
-        {/* Message content */}
         <div className="flex-1 py-5 pr-5">
           <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full mb-2 ${badge.bg} ${badge.text}`}>
             {badge.label}
@@ -261,7 +483,6 @@ function BiteyCard({ bitey, stats, appointments }: {
         </div>
       </div>
 
-      {/* Quick stats bar — hidden for new users (update #2) */}
       {!bitey.isNewUser ? (
         <div className="relative border-t border-white/10 grid grid-cols-3 divide-x divide-white/10">
           {[
@@ -289,14 +510,22 @@ function BiteyCard({ bitey, stats, appointments }: {
   );
 }
 
+// Bug fix #3: NetWorthCard now uses real dailyRevenue data
 function NetWorthCard({ stats, loading }: { stats: Stats; loading: boolean }) {
+  // Bug fix (UX): use distinct day labels so T/T ambiguity is gone
+  const DAY_LABELS = ['M', 'Tu', 'W', 'Th', 'F', 'Sa', 'Su'];
+
+  const today = new Date().getDay();
+  const todayIdx = today === 0 ? 6 : today - 1; // Mon=0 … Sun=6
+
+  const maxRevenue = Math.max(...stats.dailyRevenue, 1); // avoid divide-by-zero
+
   return (
     <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
       <div className="px-4 pt-4 pb-3">
         <p className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">
           Revenue this week
         </p>
-        {/* Always show ₱0 for new users — update #6 */}
         <p className="text-3xl font-bold text-gray-900 mt-1 leading-none">
           {loading
             ? <span className="inline-block w-32 h-8 bg-gray-100 rounded animate-pulse" />
@@ -311,15 +540,16 @@ function NetWorthCard({ stats, loading }: { stats: Stats; loading: boolean }) {
         </p>
       </div>
 
-      {/* Mini bar chart Mon–Sun */}
+      {/* Real daily revenue bar chart */}
       <div className="px-4 pb-4">
         <div className="flex items-end gap-1 h-10">
-          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => {
-            const today = new Date().getDay();
-            const todayIdx = today === 0 ? 6 : today - 1;
+          {DAY_LABELS.map((d, i) => {
             const isPast = i < todayIdx;
             const isToday = i === todayIdx;
-            const heights = [65, 80, 45, 90, 55, 30, 20];
+            // height as % of the tallest bar (min 8% so the bar is always visible)
+            const heightPct = isToday || isPast
+              ? Math.max(8, Math.round((stats.dailyRevenue[i] / maxRevenue) * 100))
+              : 8;
             return (
               <div key={i} className="flex-1 flex flex-col items-center gap-1">
                 <div
@@ -330,7 +560,7 @@ function NetWorthCard({ stats, loading }: { stats: Stats; loading: boolean }) {
                       ? 'bg-teal-400/60'
                       : 'bg-gray-100'
                   }`}
-                  style={{ height: `${(isPast || isToday) ? heights[i] : 20}%` }}
+                  style={{ height: `${heightPct}%` }}
                 />
                 <span className={`text-[9px] font-medium ${isToday ? 'text-[#1a3d2b]' : 'text-gray-300'}`}>
                   {d}
@@ -362,7 +592,6 @@ function StatCard({
         <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">{label}</span>
         <Icon className={`w-4 h-4 ${iconColor}`} />
       </div>
-      {/* Always show 0 as neutral fallback — update #6 */}
       <p className={`text-2xl font-bold leading-none ${valueColor ?? 'text-gray-900'}`}>
         {loading
           ? <span className="inline-block w-12 h-6 bg-gray-100 rounded animate-pulse" />
@@ -400,7 +629,6 @@ function QuickActions() {
   );
 }
 
-// Empty state for Today's Appointments — update #5
 function AppointmentsEmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-10 px-6 text-center gap-3">
@@ -421,7 +649,6 @@ function AppointmentsEmptyState() {
   );
 }
 
-// Empty state for Recent Activity — update #4
 function ActivityEmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-10 px-6 text-center gap-2">
@@ -441,11 +668,14 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [state, setState] = useState<DashboardState>(INITIAL_STATE);
   const [bitey, setBitey] = useState<BiteyState>({
-    emotion: 'happy',
+    emotion: 'new',
     message: BITEY_MESSAGES.new,
     isNewUser: true,
   });
   const loadingRef = useRef(false);
+  // Performance: track last focus time to enforce a real debounce cooldown
+  const lastFocusLoad = useRef(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadDashboard = useCallback(async (silent = false) => {
     if (!clinicId || loadingRef.current) return;
@@ -460,113 +690,39 @@ export default function DashboardPage() {
 
     try {
       const supabase = createClient();
-      const today = getTodayString();
-      const { weekStart, weekEnd } = getWeekRange();
-      const { pastStart, pastEnd } = getPast4WeeksRange();
 
-      const [
-        apptToday, apptFull, patients, inventory,
-        payments, pastPayments, recentAppts, recentPatients, recentPayments,
-      ] = await Promise.all([
-        supabase.from('appointments')
-          .select('id', { count: 'exact', head: true })
-          .eq('clinic_id', clinicId).eq('appointment_date', today),
-        supabase.from('appointments')
-          .select('*, patient:patients(*), dentist:dentists(*)')
-          .eq('clinic_id', clinicId).eq('appointment_date', today)
-          .order('appointment_time'),
-        supabase.from('patients')
-          .select('id', { count: 'exact', head: true })
-          .eq('clinic_id', clinicId).eq('archived', false),
-        supabase.from('inventory_items')
-          .select('id, quantity, reorder_level')
-          .eq('clinic_id', clinicId),
-        supabase.from('payments')
-          .select('amount_paid')
-          .eq('clinic_id', clinicId)
-          .gte('payment_date', weekStart).lte('payment_date', weekEnd),
-        supabase.from('payments')
-          .select('amount_paid, payment_date')
-          .eq('clinic_id', clinicId)
-          .gte('payment_date', pastStart).lte('payment_date', pastEnd),
-        supabase.from('appointments')
-          .select('id, created_at, treatment_type, patient:patients(first_name, last_name)')
-          .eq('clinic_id', clinicId)
-          .order('created_at', { ascending: false }).limit(5),
-        supabase.from('patients')
-          .select('id, created_at, first_name, last_name')
-          .eq('clinic_id', clinicId).eq('archived', false)
-          .order('created_at', { ascending: false }).limit(3),
-        supabase.from('payments')
-          .select('id, created_at, amount_paid, patient:patients(first_name, last_name)')
-          .eq('clinic_id', clinicId)
-          .order('created_at', { ascending: false }).limit(3),
+      // Performance: fetchStats and fetchActivity run fully in parallel —
+      // fetchAppointments is also parallel with both.
+      const [stats, appointments, activity] = await Promise.all([
+        fetchStats(supabase, clinicId),
+        fetchAppointments(supabase, clinicId),
+        fetchActivity(supabase, clinicId),
       ]);
 
-      const lowStock = (inventory.data ?? []).filter(i => i.quantity <= i.reorder_level).length;
-      const revenue = (payments.data ?? []).reduce((sum, p) => sum + (p.amount_paid ?? 0), 0);
-
-      // Compute 4-week average
-      const weeklyTotals: Record<string, number> = {};
-      (pastPayments.data ?? []).forEach(p => {
-        const d = new Date(p.payment_date);
-        const day = d.getDay();
-        const diff = day === 0 ? -6 : 1 - day;
-        const mon = new Date(d);
-        mon.setDate(d.getDate() + diff);
-        const key = mon.toISOString().split('T')[0];
-        weeklyTotals[key] = (weeklyTotals[key] ?? 0) + (p.amount_paid ?? 0);
-      });
-      const revenueAverage = Object.keys(weeklyTotals).length > 0
-        ? Object.values(weeklyTotals).reduce((s, v) => s + v, 0) / 4
-        : 0;
-
-      const items: ActivityItem[] = [];
-      (recentAppts.data ?? []).forEach(a => items.push({
-        id: `appt-${a.id}`, type: 'appointment',
-        description: `Appointment — ${getPatientName(a.patient as any)} for ${a.treatment_type}`,
-        timestamp: a.created_at,
-      }));
-      (recentPatients.data ?? []).forEach(p => items.push({
-        id: `pat-${p.id}`, type: 'patient',
-        description: `New patient — ${getPatientName(p)}`,
-        timestamp: p.created_at,
-      }));
-      (recentPayments.data ?? []).forEach(p => items.push({
-        id: `pay-${p.id}`, type: 'payment',
-        description: `Payment — ${getPatientName(p.patient as any)} paid ${formatPeso(p.amount_paid)}`,
-        timestamp: p.created_at,
-      }));
-      items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      const next = {
-        stats: {
-          todaysAppointments: apptToday.count ?? 0,
-          totalPatients: patients.count ?? 0,
-          lowStockAlerts: lowStock,
-          revenueThisWeek: revenue,
-          revenueAverage,
-        },
-        appointments: (apptFull.data ?? []) as Appointment[],
-        activity: items.slice(0, 8),
-      };
-
+      const next = { stats, appointments, activity };
       cache.data = next;
       cache.ts = Date.now();
       setState({ ...next, loading: false });
 
-      // Derive Bitey state instantly — no API needed
-      const isNewUser = detectNewUser(next.stats, next.activity);
-      setBitey(deriveBiteyState(next.stats, next.appointments, isNewUser));
+      const isNewUser = detectNewUser(stats, activity);
+      setBitey(deriveBiteyState(stats, appointments, isNewUser));
     } catch (error) {
       console.error('Dashboard load error:', error);
       if (!silent) toast.error('Failed to load dashboard data');
       setState(s => ({ ...s, loading: false }));
-      setBitey(b => ({ ...b }));
     } finally {
       loadingRef.current = false;
     }
   }, [clinicId]);
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    await loadDashboard();
+    setRefreshing(false);
+  }, [loadDashboard, refreshing]);
+
+  const { pullY, triggered } = usePullToRefresh(handleRefresh);
 
   useEffect(() => {
     if (!clinicLoading) loadDashboard();
@@ -574,26 +730,73 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+
     const onFocus = () => {
+      const now = Date.now();
+      // Performance: only allow a focus-triggered reload if at least CACHE_TTL
+      // has elapsed since the last one — prevents rapid tab-switching hammering
+      // the DB even with just a 300ms setTimeout debounce.
+      if (now - lastFocusLoad.current < CACHE_TTL) return;
       clearTimeout(timer);
-      timer = setTimeout(() => loadDashboard(true), 300);
+      timer = setTimeout(() => {
+        lastFocusLoad.current = Date.now();
+        loadDashboard(true);
+      }, 300);
     };
+
     window.addEventListener('focus', onFocus);
-    return () => { window.removeEventListener('focus', onFocus); clearTimeout(timer); };
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearTimeout(timer);
+    };
   }, [loadDashboard]);
 
   useEffect(() => {
-  const timer = setTimeout(() => {
-    setState(s => s.loading ? { ...s, loading: false } : s);
-  }, 5000);
-  return () => clearTimeout(timer);
-}, []);
+    const timer = setTimeout(() => {
+      setState(s => s.loading ? { ...s, loading: false } : s);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const { stats, appointments, activity, loading } = state;
   const hasLowStock = stats.lowStockAlerts > 0;
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="relative space-y-4 pb-8">
+
+      {/* ── Pull-to-refresh indicator (mobile only) ── */}
+      {pullY > 0 && (
+        <div
+          className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center pointer-events-none"
+          style={{ height: pullY }}
+        >
+          <div
+            className="w-8 h-8 rounded-full bg-white shadow-md border border-gray-100 flex items-center justify-center"
+            style={{ opacity: Math.min(1, pullY / PTR_THRESHOLD) }}
+          >
+            <svg
+              className="w-4 h-4 text-[#1a3d2b]"
+              viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
+              style={{ transform: `rotate(${(pullY / PTR_THRESHOLD) * 180}deg)` }}
+            >
+              <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2M13.5 2.5V5H11" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+        </div>
+      )}
+
+      {/* ── Triggered / refreshing spinner overlay ── */}
+      {(triggered || refreshing) && !loading && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-white shadow-md border border-gray-100 rounded-full px-3 py-1.5 pointer-events-none">
+          <svg
+            className="w-3.5 h-3.5 text-[#1a3d2b] animate-spin"
+            viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
+          >
+            <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2M13.5 2.5V5H11" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span className="text-[11px] font-medium text-gray-500">Refreshing…</span>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
@@ -602,11 +805,15 @@ export default function DashboardPage() {
           <p className="text-xs text-gray-400 mt-0.5">Here's your clinic at a glance.</p>
         </div>
         <button
-          onClick={() => loadDashboard()}
-          className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center disabled:opacity-50"
           title="Refresh"
         >
-          <svg className="w-3.5 h-3.5 text-gray-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg
+            className={`w-3.5 h-3.5 text-gray-500 ${refreshing ? 'animate-spin' : ''}`}
+            viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
+          >
             <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2M13.5 2.5V5H11" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
@@ -615,7 +822,7 @@ export default function DashboardPage() {
       {/* ── Bitey Hero Card ── */}
       <BiteyCard bitey={bitey} stats={stats} appointments={appointments} />
 
-      {/* ── Quick Actions — moved above revenue (update #3) ── */}
+      {/* ── Quick Actions ── */}
       <QuickActions />
 
       {/* ── Stat Cards ── */}
@@ -651,14 +858,14 @@ export default function DashboardPage() {
         <StatCard
           label="Weekly avg revenue"
           value={formatPeso(stats.revenueAverage)}
-          sub="Last 4 weeks"
+          sub="Past weeks"
           icon={TrendingUp}
           iconColor="text-emerald-600"
           loading={loading}
         />
       </div>
 
-      {/* ── Revenue + Mini Chart ── */}
+      {/* ── Revenue + Real Bar Chart ── */}
       <NetWorthCard stats={stats} loading={loading} />
 
       {/* ── Today's Appointments ── */}
@@ -671,7 +878,6 @@ export default function DashboardPage() {
             View all <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
-        {/* Empty state — update #5 */}
         {!loading && appointments.length === 0 ? (
           <AppointmentsEmptyState />
         ) : (
@@ -688,7 +894,6 @@ export default function DashboardPage() {
             Recent Activity
           </h3>
         </div>
-        {/* Empty state — update #4 */}
         {!loading && activity.length === 0 ? (
           <ActivityEmptyState />
         ) : (
