@@ -236,10 +236,7 @@ export function NotificationsBell() {
     <div ref={panelRef} className="relative">
       {/* Bell button */}
       <button
-        onClick={() => {
-          setOpen(v => !v);
-          if (!open && clinicId) generateNotifications();
-        }}
+        onClick={() => setOpen(v => !v)}
         className="relative p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
         title="Notifications"
       >
