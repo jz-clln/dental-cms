@@ -7,6 +7,8 @@ import { Input, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { INVENTORY_CATEGORIES, getTodayString } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { Plus, Minus } from 'lucide-react';
 
 /* ─── ADD / EDIT ITEM FORM ─────────────────────────────────── */
 
@@ -41,7 +43,6 @@ export function AddItemForm({ clinicId, existing, onSuccess, onCancel, toast }: 
     last_restocked: existing?.last_restocked ?? getTodayString(),
   });
 
-  // Dirty: any field changed from initial/empty state
   const isDirty = !submitted && (
     !!form.item_name || !!form.category || form.quantity > 0
   );
@@ -152,6 +153,7 @@ interface RestockFormProps {
 }
 
 export function RestockForm({ item, onSuccess, onCancel, toast }: RestockFormProps) {
+  const [mode, setMode] = useState<'add' | 'deduct'>('add');
   const [qty, setQty] = useState(0);
   const [date, setDate] = useState(getTodayString());
   const [loading, setLoading] = useState(false);
@@ -161,25 +163,50 @@ export function RestockForm({ item, onSuccess, onCancel, toast }: RestockFormPro
 
   const isDirty = !submitted && qty > 0;
 
+  const newTotal = mode === 'add'
+    ? item.quantity + Number(qty)
+    : item.quantity - Number(qty);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (qty <= 0) { setError('Enter a quantity greater than 0.'); return; }
+    setError('');
+
+    if (qty <= 0) {
+      setError('Enter a quantity greater than 0.');
+      return;
+    }
+
+    if (mode === 'deduct' && qty > item.quantity) {
+      setError(`You cannot deduct more than the current stock of ${item.quantity} ${item.unit}.`);
+      return;
+    }
+
     setLoading(true);
 
     const supabase = createClient();
-    const newQty = item.quantity + Number(qty);
+    const updatePayload: Record<string, unknown> = { quantity: newTotal };
+
+    // Only update last_restocked when adding stock
+    if (mode === 'add') {
+      updatePayload.last_restocked = date;
+    }
+
     const { error: dbErr } = await supabase
       .from('inventory_items')
-      .update({ quantity: newQty, last_restocked: date })
+      .update(updatePayload)
       .eq('id', item.id);
 
     if (dbErr) {
       toast.error('Failed to update stock.');
     } else {
       setSubmitted(true);
-      toast.success(`Stock updated: ${item.item_name} is now ${newQty} ${item.unit}.`);
+      const action = mode === 'add' ? 'restocked' : 'deducted from';
+      toast.success(
+        `Stock updated. ${item.item_name} is now ${newTotal} ${item.unit}.`
+      );
       onSuccess();
     }
+
     setLoading(false);
   }
 
@@ -188,39 +215,127 @@ export function RestockForm({ item, onSuccess, onCancel, toast }: RestockFormPro
     else onCancel();
   }
 
+  function handleQtyChange(value: string) {
+    setQty(Number(value));
+    setError('');
+  }
+
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-4">
+
+        {/* Current stock info */}
         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
           <p className="text-sm text-gray-500">Item</p>
           <p className="font-semibold text-gray-900 mt-0.5">{item.item_name}</p>
           <div className="flex gap-6 mt-3">
             <div>
               <p className="text-xs text-gray-400">Current Stock</p>
-              <p className={`text-xl font-bold mt-0.5 ${item.quantity <= item.reorder_level ? 'text-red-600' : 'text-gray-900'}`}>
-                {item.quantity} <span className="text-sm font-normal text-gray-400">{item.unit}</span>
+              <p className={cn(
+                'text-xl font-bold mt-0.5',
+                item.quantity <= item.reorder_level ? 'text-red-600' : 'text-gray-900'
+              )}>
+                {item.quantity}{' '}
+                <span className="text-sm font-normal text-gray-400">{item.unit}</span>
               </p>
             </div>
             <div>
               <p className="text-xs text-gray-400">Reorder Level</p>
               <p className="text-xl font-bold mt-0.5 text-gray-400">
-                {item.reorder_level} <span className="text-sm font-normal">{item.unit}</span>
+                {item.reorder_level}{' '}
+                <span className="text-sm font-normal">{item.unit}</span>
               </p>
             </div>
           </div>
         </div>
 
+        {/* Add / Deduct toggle */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">Action</label>
+          <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-gray-50 p-1 gap-1">
+            <button
+              type="button"
+              onClick={() => { setMode('add'); setQty(0); setError(''); }}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all',
+                mode === 'add'
+                  ? 'bg-teal-700 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              <Plus className="w-4 h-4" />
+              Add Stock
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('deduct'); setQty(0); setError(''); }}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all',
+                mode === 'deduct'
+                  ? 'bg-red-600 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              <Minus className="w-4 h-4" />
+              Deduct Stock
+            </button>
+          </div>
+        </div>
+
+        {/* Quantity input */}
         <Input
-          label="Quantity to Add" type="number" min={1}
-          value={qty || ''} onChange={e => { setQty(Number(e.target.value)); setError(''); }}
-          error={error} placeholder="0"
-          hint={qty > 0 ? `New total will be ${item.quantity + Number(qty)} ${item.unit}` : undefined}
+          label={mode === 'add' ? 'Quantity to Add' : 'Quantity to Deduct'}
+          type="number"
+          min={1}
+          max={mode === 'deduct' ? item.quantity : undefined}
+          value={qty || ''}
+          onChange={e => handleQtyChange(e.target.value)}
+          error={error}
+          placeholder="0"
+          hint={
+            qty > 0 && !error
+              ? `New total will be ${newTotal} ${item.unit}`
+              : undefined
+          }
         />
-        <Input label="Restock Date" type="date" value={date} onChange={e => setDate(e.target.value)} />
+
+        {/* New total preview */}
+        {qty > 0 && !error && (
+          <div className={cn(
+            'flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium',
+            newTotal <= item.reorder_level
+              ? 'bg-red-50 border-red-100 text-red-700'
+              : 'bg-teal-50 border-teal-100 text-teal-700'
+          )}>
+            <span>New total after {mode === 'add' ? 'restocking' : 'deduction'}</span>
+            <span className="text-lg font-bold">
+              {newTotal} {item.unit}
+            </span>
+          </div>
+        )}
+
+        {/* Restock date — only shown when adding */}
+        {mode === 'add' && (
+          <Input
+            label="Restock Date"
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+          />
+        )}
 
         <div className="flex gap-3 pt-1">
-          <Button type="submit" loading={loading} className="flex-1 sm:flex-none">Update Stock</Button>
-          <Button type="button" variant="secondary" onClick={handleCancel}>Cancel</Button>
+          <Button
+            type="submit"
+            loading={loading}
+            variant={mode === 'deduct' ? 'danger' : 'primary'}
+            className="flex-1 sm:flex-none"
+          >
+            {mode === 'add' ? 'Update Stock' : 'Deduct Stock'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={handleCancel}>
+            Cancel
+          </Button>
         </div>
       </form>
 
