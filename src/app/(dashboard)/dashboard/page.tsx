@@ -447,7 +447,7 @@ function BiteyCard({ bitey, stats, appointments }: {
       />
 
       <div className="relative flex items-center justify-center md:justify-start gap-0">
-        <div className="relative flex-shrink-0 w-[120px] h-[140px] sm:w-[140px] sm:h-[160px] md:w-[160px] md:h-[180px] self-end md:self-center">
+        <div className="relative flex-shrink-0 w-[150px] h-[170px] sm:w-[140px] sm:h-[160px] md:w-[160px] md:h-[180px] self-end md:self-center">
           <Image
             src={`/bitey/${bitey.emotion}.png`}
             alt={`Bitey is ${bitey.emotion}`}

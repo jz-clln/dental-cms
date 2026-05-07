@@ -233,7 +233,7 @@ export function NotificationsBell() {
   }
 
   return (
-    <div ref={panelRef} className="relative">
+    <div ref={panelRef} className="relative z-50">
       {/* Bell button */}
       <button
         onClick={() => setOpen(v => !v)}
