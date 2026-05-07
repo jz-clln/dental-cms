@@ -447,7 +447,7 @@ function BiteyCard({ bitey, stats, appointments }: {
       />
 
       <div className="relative flex items-end gap-0">
-        <div className="relative flex-shrink-0 w-[120px] h-[130px] self-end">
+        <div className="relative flex-shrink-0 w-[140px] h-[150px] sm:w-[120px] sm:h-[130px] self-end">
           <Image
             src={`/bitey/${bitey.emotion}.png`}
             alt={`Bitey is ${bitey.emotion}`}
@@ -457,7 +457,7 @@ function BiteyCard({ bitey, stats, appointments }: {
           />
         </div>
 
-        <div className="flex-1 py-5 pr-5">
+        <div className="flex-1 py-5 pr-4 sm:pr-5">
           <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full mb-2 ${badge.bg} ${badge.text}`}>
             {badge.label}
           </span>
@@ -490,11 +490,11 @@ function BiteyCard({ bitey, stats, appointments }: {
             { label: 'No-shows', value: noShowCount, warn: noShowCount > 0 },
             { label: 'Low stock', value: stats.lowStockAlerts, warn: hasLowStock },
           ].map(item => (
-            <div key={item.label} className="py-3 px-4 text-center">
-              <p className={`text-lg font-bold leading-none ${item.warn ? 'text-red-300' : 'text-white'}`}>
+            <div key={item.label} className="py-2.5 sm:py-3 px-2 sm:px-4 text-center">
+              <p className={`text-base sm:text-lg font-bold leading-none ${item.warn ? 'text-red-300' : 'text-white'}`}>
                 {item.value}
               </p>
-              <p className="text-[10px] text-white/40 mt-0.5 uppercase tracking-wide">{item.label}</p>
+              <p className="text-[9px] sm:text-[10px] text-white/40 mt-0.5 uppercase tracking-wide">{item.label}</p>
             </div>
           ))}
         </div>
@@ -526,7 +526,7 @@ function NetWorthCard({ stats, loading }: { stats: Stats; loading: boolean }) {
         <p className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">
           Revenue this week
         </p>
-        <p className="text-3xl font-bold text-gray-900 mt-1 leading-none">
+        <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1 leading-none">
           {loading
             ? <span className="inline-block w-32 h-8 bg-gray-100 rounded animate-pulse" />
             : formatPeso(stats.revenueThisWeek)}
@@ -587,17 +587,17 @@ function StatCard({
   href?: string;
 }) {
   const inner = (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 flex flex-col gap-2 hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-3.5 py-3 flex flex-col gap-1.5 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">{label}</span>
-        <Icon className={`w-4 h-4 ${iconColor}`} />
+        <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-semibold text-gray-400">{label}</span>
+        <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${iconColor}`} />
       </div>
-      <p className={`text-2xl font-bold leading-none ${valueColor ?? 'text-gray-900'}`}>
+      <p className={`text-xl sm:text-2xl font-bold leading-none ${valueColor ?? 'text-gray-900'}`}>
         {loading
           ? <span className="inline-block w-12 h-6 bg-gray-100 rounded animate-pulse" />
           : (value ?? 0)}
       </p>
-      <p className="text-[10px] text-gray-400">{sub}</p>
+      <p className="text-[9px] sm:text-[10px] text-gray-400">{sub}</p>
     </div>
   );
   return href ? <Link href={href}>{inner}</Link> : inner;
@@ -616,12 +616,12 @@ function QuickActions() {
           <Link
             key={action.href}
             href={action.href}
-            className="flex flex-col items-center gap-2 px-3 py-3.5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all text-center"
+            className="flex flex-col items-center gap-1.5 px-2 py-3 sm:py-3.5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all text-center"
           >
-            <span className={`w-7 h-7 rounded-full flex items-center justify-center ${action.dot}`}>
-              <action.icon className="w-3.5 h-3.5 text-white" />
+            <span className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center ${action.dot}`}>
+              <action.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
             </span>
-            <span className="text-[11px] font-medium text-gray-600 leading-tight">{action.label}</span>
+            <span className="text-[10px] sm:text-[11px] font-medium text-gray-600 leading-tight">{action.label}</span>
           </Link>
         ))}
       </div>
@@ -762,7 +762,7 @@ export default function DashboardPage() {
   const hasLowStock = stats.lowStockAlerts > 0;
 
   return (
-    <div className="relative space-y-4 pb-8">
+    <div className="relative space-y-3 sm:space-y-4 pb-8">
 
       {/* ── Pull-to-refresh indicator (mobile only) ── */}
       {pullY > 0 && (

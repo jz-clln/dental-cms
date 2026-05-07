@@ -90,16 +90,6 @@ export function TopBar() {
         {/* Live notifications bell */}
         <NotificationsBell />
 
-        {/* User avatar */}
-        <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-teal-700 flex items-center justify-center">
-              <span className="text-white text-xs font-semibold">{initials}</span>
-            </div>
-          )}
-        </div>
       </div>
     </header>
   );
