@@ -446,8 +446,8 @@ function BiteyCard({ bitey, stats, appointments }: {
         }}
       />
 
-      <div className="relative flex items-end gap-0">
-        <div className="relative flex-shrink-0 w-[140px] h-[150px] sm:w-[120px] sm:h-[130px] self-end">
+      <div className="relative flex items-center justify-center md:justify-start gap-0">
+        <div className="relative flex-shrink-0 w-[120px] h-[140px] sm:w-[140px] sm:h-[160px] md:w-[160px] md:h-[180px] self-end md:self-center">
           <Image
             src={`/bitey/${bitey.emotion}.png`}
             alt={`Bitey is ${bitey.emotion}`}
@@ -457,8 +457,8 @@ function BiteyCard({ bitey, stats, appointments }: {
           />
         </div>
 
-        <div className="flex-1 py-5 pr-4 sm:pr-5">
-          <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full mb-2 ${badge.bg} ${badge.text}`}>
+        <div className="md:flex-1 py-4 pr-4 sm:py-5 sm:pr-5">
+          <span className={`inline-block text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full mb-1.5 sm:mb-2 ${badge.bg} ${badge.text}`}>
             {badge.label}
           </span>
 
@@ -469,10 +469,10 @@ function BiteyCard({ bitey, stats, appointments }: {
                   key={i}
                   className={
                     i === 0
-                      ? 'text-[13px] font-semibold text-white/90 leading-snug'
+                      ? 'text-[11px] md:text-[17px] font-bold text-white leading-snug tracking-tight'
                       : i === 1
-                      ? 'text-[13px] text-white/80 leading-snug font-medium'
-                      : 'text-[11px] text-white/55 leading-snug'
+                      ? 'text-[10px] md:text-[15px] text-emerald-200 leading-snug font-semibold'
+                      : 'text-[9px] md:text-[13px] text-white/50 leading-relaxed italic'
                   }
                 >
                   {line}
