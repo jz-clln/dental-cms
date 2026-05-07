@@ -61,16 +61,18 @@ export function TopBar() {
 
   return (
     <header className="bg-white border-b border-gray-100 px-4 md:px-6 py-3.5 flex items-center
-      justify-between sticky top-0 z-20 gap-3">
+      justify-between sticky top-0 z-30 gap-3">
 
       {/* Left: page title */}
-      <h1 className="text-lg font-semibold text-gray-900 ml-10 md:ml-0 flex-shrink-0">{title}</h1>
+      <h1 className="text-lg font-semibold text-gray-900 ml-10 md:ml-0 flex-shrink-0 truncate max-w-[120px] md:max-w-none">{title}</h1>
 
       {/* Right: search + print + bell + avatar */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3 md:gap-2 min-w-0">
 
         {/* Global search */}
-        <GlobalSearch />
+        <div className="w-[130px] sm:w-auto flex-shrink min-w-0">
+          <GlobalSearch />
+        </div>
 
         {/* Print schedule — only on appointments page */}
         {isAppointmentsPage && (

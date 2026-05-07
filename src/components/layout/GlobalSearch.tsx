@@ -141,7 +141,7 @@ export function GlobalSearch() {
   const showDropdown = open && query.length >= 2;
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative z-40">
       {/* Search input */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -153,8 +153,8 @@ export function GlobalSearch() {
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="Search… ( / )"
-          className="w-40 sm:w-56 pl-9 pr-8 py-2 rounded-lg border border-gray-200 text-sm
-            bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500
+          className="w-32 sm:w-56 pl-9 pr-8 py-2 rounded-lg border border-gray-200 text-sm
+          bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500
             focus:border-transparent hover:border-gray-300 transition-all"
         />
         {query && (
@@ -169,8 +169,8 @@ export function GlobalSearch() {
 
       {/* Dropdown */}
       {showDropdown && (
-        <div className="absolute top-full mt-2 left-0 w-80 bg-white rounded-xl border border-gray-100
-          shadow-xl z-50 overflow-hidden animate-in">
+        <div className="absolute top-full mt-2 left-0 w-72 max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-gray-100
+          shadow-xl z-40 overflow-hidden animate-in">
 
           {loading ? (
             <div className="flex items-center gap-2 px-4 py-4 text-sm text-gray-400">
