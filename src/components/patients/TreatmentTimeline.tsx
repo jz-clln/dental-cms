@@ -48,12 +48,12 @@ export function TreatmentTimeline({ patientId }: TreatmentTimelineProps) {
     const [notesRes, apptRes, billRes, payRes] = await Promise.all([
       supabase
         .from('visit_notes')
-        .select('*, appointment:appointments(treatment_type, appointment_date, appointment_time, status, dentist:dentists(name))')
+        .select('*, appointment:appointments(treatment_type, appointment_date, appointment_time, status, dentist:dentists(id, first_name, last_name))')
         .eq('patient_id', patientId)
         .order('created_at', { ascending: false }),
       supabase
         .from('appointments')
-        .select('*, dentist:dentists(name)')
+        .select('*, dentist:dentists(id, first_name, last_name)')
         .eq('patient_id', patientId)
         .order('appointment_date', { ascending: false }),
       supabase
@@ -91,7 +91,7 @@ export function TreatmentTimeline({ patientId }: TreatmentTimelineProps) {
         type: 'visit',
         treatment: appt.treatment_type,
         status: appt.status,
-        dentist: (appt as any).dentist?.name,
+        dentist: (appt as any).dentist ? `${(appt as any).dentist.first_name} ${(appt as any).dentist.last_name}`.trim() : undefined,
         note: relatedNotes[0]?.notes,
         amount: relatedCharges.reduce((s, b) => s + b.amount_charged, 0) || undefined,
         appointmentId: appt.id,

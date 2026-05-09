@@ -61,9 +61,9 @@ export function useTrialStatus(): TrialStatus {
 
         const clinic = clinicRes.data;
         const patientCount = countRes.count ?? 0;
-        const plan = (clinic as any)?.plan ?? 'free';
+        const plan = (clinic as any)?.plan ?? 'trial';
 
-        if (plan && plan !== 'free') {
+        if (plan === 'paid' || plan === 'pro') {
           setStatus({ state: 'paid', daysLeft: 0, daysTotal: TRIAL_DAYS,
             patientLimit: Infinity, canAddPatient: true, patientCount, loading: false });
           return;
@@ -75,9 +75,8 @@ export function useTrialStatus(): TrialStatus {
 
         let daysLeft = 0;
         if (trialEndsAt && isTrialing) {
-          daysLeft = Math.max(0, Math.ceil(
-            (trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-          ));
+          const diffMs = trialEndsAt.getTime() - now.getTime();
+          daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
         }
 
         const state: TrialState = isTrialing ? 'trialing' : 'expired';

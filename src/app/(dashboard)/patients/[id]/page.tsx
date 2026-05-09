@@ -64,7 +64,7 @@ export default function PatientProfilePage() {
     const [patientRes, apptRes, billRes, payRes] = await Promise.all([
       supabase.from('patients').select('*').eq('id', id).single(),
       supabase.from('appointments')
-        .select('*, dentist:dentists(name)')
+        .select('*, dentist:dentists(id, first_name, last_name)')
         .eq('patient_id', id)
         .gte('appointment_date', today)
         .order('appointment_date', { ascending: true })

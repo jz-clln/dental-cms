@@ -25,6 +25,8 @@ export interface Dentist {
   id: string;
   clinic_id: string;
   name: string;
+  first_name: string | null;
+  last_name: string | null;
   specialty: string | null;
   schedule_days: string[] | null;
   created_at: string;

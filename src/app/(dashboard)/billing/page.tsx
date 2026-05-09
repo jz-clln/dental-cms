@@ -8,7 +8,7 @@ import { ChargeForm } from '@/components/billing/ChargeForm';
 import { PaymentForm } from '@/components/billing/PaymentForm';
 import { PatientBillingDetail } from '@/components/billing/PatientBillingDetail';
 import { Modal } from '@/components/ui/Modal';
-import { useAppToast } from '@/app/(dashboard)/layout';
+import { useAppToast } from '@/lib/context/toast-context';
 import { formatPeso, getBillingStatus, getTodayString } from '@/lib/utils';
 import { TrendingUp, Receipt, AlertCircle, CheckCircle } from 'lucide-react';
 

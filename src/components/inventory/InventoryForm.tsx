@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { INVENTORY_CATEGORIES, getTodayString } from '@/lib/utils';
 import { cn } from '@/lib/utils';
-import { Plus, Minus } from 'lucide-react';
+import { Plus, Minus, Package, AlertTriangle } from 'lucide-react';
 
 /* ─── ADD / EDIT ITEM FORM ─────────────────────────────────── */
 
@@ -43,9 +43,7 @@ export function AddItemForm({ clinicId, existing, onSuccess, onCancel, toast }: 
     last_restocked: existing?.last_restocked ?? getTodayString(),
   });
 
-  const isDirty = !submitted && (
-    !!form.item_name || !!form.category || form.quantity > 0
-  );
+  const isDirty = !submitted && (!!form.item_name || !!form.category || form.quantity > 0);
 
   function set<K extends keyof InventoryFormData>(field: K, value: InventoryFormData[K]) {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -102,35 +100,74 @@ export function AddItemForm({ clinicId, existing, onSuccess, onCancel, toast }: 
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-4">
+
+        {/* Item name */}
         <Input
-          label="Item Name" placeholder="e.g. Dental Gloves (Medium)"
-          value={form.item_name} onChange={e => set('item_name', e.target.value)}
-          error={errors.item_name} required
+          label="Item Name"
+          placeholder="e.g. Dental Gloves (Medium)"
+          value={form.item_name}
+          onChange={e => set('item_name', e.target.value)}
+          error={errors.item_name}
+          required
         />
-        <div className="grid grid-cols-2 gap-4">
-          <Select label="Category" value={form.category}
+
+        {/* Category + Unit */}
+        <div className="grid grid-cols-2 gap-3">
+          <Select
+            label="Category"
+            value={form.category}
             onChange={e => set('category', e.target.value)}
-            error={errors.category} placeholder="Select category…">
+            error={errors.category}
+            placeholder="Select category…"
+          >
             {INVENTORY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </Select>
-          <Input label="Unit" placeholder="pcs, box, bottle…"
-            value={form.unit} onChange={e => set('unit', e.target.value)} error={errors.unit} />
+          <Input
+            label="Unit"
+            placeholder="pcs, box, bottle…"
+            value={form.unit}
+            onChange={e => set('unit', e.target.value)}
+            error={errors.unit}
+          />
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <Input label="Current Quantity" type="number" min={0}
-            value={form.quantity} onChange={e => set('quantity', Number(e.target.value))} error={errors.quantity} />
-          <Input label="Reorder Level" type="number" min={0}
-            value={form.reorder_level} onChange={e => set('reorder_level', Number(e.target.value))}
-            error={errors.reorder_level} hint="Alert when stock falls below this" />
-        </div>
-        <Input label="Last Restocked" type="date"
-          value={form.last_restocked} onChange={e => set('last_restocked', e.target.value)} />
 
-        <div className="flex gap-3 pt-1">
+        {/* Quantity + Reorder level */}
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Current Quantity"
+            type="number"
+            min={0}
+            value={form.quantity}
+            onChange={e => set('quantity', Number(e.target.value))}
+            error={errors.quantity}
+          />
+          <Input
+            label="Reorder Level"
+            type="number"
+            min={0}
+            value={form.reorder_level}
+            onChange={e => set('reorder_level', Number(e.target.value))}
+            error={errors.reorder_level}
+            hint="Alert when stock falls below this"
+          />
+        </div>
+
+        {/* Last restocked */}
+        <Input
+          label="Last Restocked"
+          type="date"
+          value={form.last_restocked}
+          onChange={e => set('last_restocked', e.target.value)}
+        />
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-1">
           <Button type="submit" loading={loading} className="flex-1 sm:flex-none">
             {existing ? 'Save Changes' : 'Add Item'}
           </Button>
-          <Button type="button" variant="secondary" onClick={handleCancel}>Cancel</Button>
+          <Button type="button" variant="secondary" onClick={handleCancel}>
+            Cancel
+          </Button>
         </div>
       </form>
 
@@ -162,51 +199,37 @@ export function RestockForm({ item, onSuccess, onCancel, toast }: RestockFormPro
   const [error, setError] = useState('');
 
   const isDirty = !submitted && qty > 0;
-
+  const isLow = item.quantity <= item.reorder_level;
   const newTotal = mode === 'add'
     ? item.quantity + Number(qty)
     : item.quantity - Number(qty);
+  const newIsLow = qty > 0 && !error && newTotal <= item.reorder_level;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
-    if (qty <= 0) {
-      setError('Enter a quantity greater than 0.');
-      return;
-    }
-
+    if (qty <= 0) { setError('Enter a quantity greater than 0.'); return; }
     if (mode === 'deduct' && qty > item.quantity) {
-      setError(`You cannot deduct more than the current stock of ${item.quantity} ${item.unit}.`);
+      setError(`Cannot deduct more than current stock of ${item.quantity} ${item.unit}.`);
       return;
     }
 
     setLoading(true);
-
     const supabase = createClient();
     const updatePayload: Record<string, unknown> = { quantity: newTotal };
-
-    // Only update last_restocked when adding stock
-    if (mode === 'add') {
-      updatePayload.last_restocked = date;
-    }
+    if (mode === 'add') updatePayload.last_restocked = date;
 
     const { error: dbErr } = await supabase
-      .from('inventory_items')
-      .update(updatePayload)
-      .eq('id', item.id);
+      .from('inventory_items').update(updatePayload).eq('id', item.id);
 
     if (dbErr) {
       toast.error('Failed to update stock.');
     } else {
       setSubmitted(true);
-      const action = mode === 'add' ? 'restocked' : 'deducted from';
-      toast.success(
-        `Stock updated. ${item.item_name} is now ${newTotal} ${item.unit}.`
-      );
+      toast.success(`Stock updated. ${item.item_name} is now ${newTotal} ${item.unit}.`);
       onSuccess();
     }
-
     setLoading(false);
   }
 
@@ -224,26 +247,56 @@ export function RestockForm({ item, onSuccess, onCancel, toast }: RestockFormPro
     <>
       <form onSubmit={handleSubmit} className="space-y-4">
 
-        {/* Current stock info */}
-        <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-          <p className="text-sm text-gray-500">Item</p>
-          <p className="font-semibold text-gray-900 mt-0.5">{item.item_name}</p>
-          <div className="flex gap-6 mt-3">
-            <div>
-              <p className="text-xs text-gray-400">Current Stock</p>
+        {/* Current stock card */}
+        <div className={cn(
+          'rounded-2xl border px-4 py-3.5',
+          isLow
+            ? 'bg-red-50/60 border-red-200/60'
+            : 'bg-gray-50/80 border-gray-100'
+        )}>
+          <div className="flex items-start gap-3">
+            {/* Icon */}
+            <div className={cn(
+              'w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5',
+              isLow ? 'bg-red-100 ring-1 ring-red-200/60' : 'bg-white ring-1 ring-gray-200/60'
+            )}>
+              {isLow
+                ? <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                : <Package className="w-3.5 h-3.5 text-gray-400" />
+              }
+            </div>
+
+            <div className="flex-1 min-w-0">
               <p className={cn(
-                'text-xl font-bold mt-0.5',
-                item.quantity <= item.reorder_level ? 'text-red-600' : 'text-gray-900'
+                'text-[13px] font-semibold leading-tight truncate',
+                isLow ? 'text-red-800' : 'text-gray-800'
               )}>
-                {item.quantity}{' '}
-                <span className="text-sm font-normal text-gray-400">{item.unit}</span>
+                {item.item_name}
+              </p>
+              {isLow && (
+                <p className="text-[11px] text-red-500 font-medium mt-0.5">Below reorder level</p>
+              )}
+            </div>
+          </div>
+
+          {/* Stock numbers */}
+          <div className="flex gap-5 mt-3 pt-3 border-t border-gray-100">
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-0.5">Current Stock</p>
+              <p className={cn(
+                'text-xl font-bold tabular-nums leading-none',
+                isLow ? 'text-red-600' : 'text-gray-800'
+              )}>
+                {item.quantity}
+                <span className="text-[12px] font-normal text-gray-400 ml-1">{item.unit}</span>
               </p>
             </div>
+            <div className="w-px bg-gray-200" />
             <div>
-              <p className="text-xs text-gray-400">Reorder Level</p>
-              <p className="text-xl font-bold mt-0.5 text-gray-400">
-                {item.reorder_level}{' '}
-                <span className="text-sm font-normal">{item.unit}</span>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-0.5">Reorder At</p>
+              <p className="text-xl font-bold tabular-nums leading-none text-gray-400">
+                {item.reorder_level}
+                <span className="text-[12px] font-normal ml-1">{item.unit}</span>
               </p>
             </div>
           </div>
@@ -251,32 +304,32 @@ export function RestockForm({ item, onSuccess, onCancel, toast }: RestockFormPro
 
         {/* Add / Deduct toggle */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-700">Action</label>
-          <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-gray-50 p-1 gap-1">
+          <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Action</label>
+          <div className="flex rounded-xl border border-gray-200 bg-gray-50/80 p-1 gap-1">
             <button
               type="button"
               onClick={() => { setMode('add'); setQty(0); setError(''); }}
               className={cn(
-                'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all',
+                'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-semibold transition-all',
                 mode === 'add'
                   ? 'bg-teal-700 text-white shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
               )}
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               Add Stock
             </button>
             <button
               type="button"
               onClick={() => { setMode('deduct'); setQty(0); setError(''); }}
               className={cn(
-                'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all',
+                'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-semibold transition-all',
                 mode === 'deduct'
-                  ? 'bg-red-600 text-white shadow-sm'
+                  ? 'bg-red-500 text-white shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
               )}
             >
-              <Minus className="w-4 h-4" />
+              <Minus className="w-3.5 h-3.5" />
               Deduct Stock
             </button>
           </div>
@@ -292,29 +345,38 @@ export function RestockForm({ item, onSuccess, onCancel, toast }: RestockFormPro
           onChange={e => handleQtyChange(e.target.value)}
           error={error}
           placeholder="0"
-          hint={
-            qty > 0 && !error
-              ? `New total will be ${newTotal} ${item.unit}`
-              : undefined
-          }
         />
 
         {/* New total preview */}
         {qty > 0 && !error && (
           <div className={cn(
-            'flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium',
-            newTotal <= item.reorder_level
-              ? 'bg-red-50 border-red-100 text-red-700'
-              : 'bg-teal-50 border-teal-100 text-teal-700'
+            'flex items-center justify-between px-4 py-3 rounded-xl border',
+            newIsLow
+              ? 'bg-red-50/60 border-red-200/60'
+              : 'bg-teal-50/60 border-teal-200/60'
           )}>
-            <span>New total after {mode === 'add' ? 'restocking' : 'deduction'}</span>
-            <span className="text-lg font-bold">
-              {newTotal} {item.unit}
-            </span>
+            <div>
+              <p className={cn(
+                'text-[10px] font-semibold uppercase tracking-wider',
+                newIsLow ? 'text-red-400' : 'text-teal-500'
+              )}>
+                New total after {mode === 'add' ? 'restocking' : 'deduction'}
+              </p>
+              {newIsLow && (
+                <p className="text-[11px] text-red-500 mt-0.5">Still below reorder level</p>
+              )}
+            </div>
+            <p className={cn(
+              'text-xl font-bold tabular-nums',
+              newIsLow ? 'text-red-600' : 'text-teal-700'
+            )}>
+              {newTotal}
+              <span className="text-[12px] font-normal ml-1 opacity-70">{item.unit}</span>
+            </p>
           </div>
         )}
 
-        {/* Restock date — only shown when adding */}
+        {/* Restock date — only for add mode */}
         {mode === 'add' && (
           <Input
             label="Restock Date"
@@ -324,7 +386,8 @@ export function RestockForm({ item, onSuccess, onCancel, toast }: RestockFormPro
           />
         )}
 
-        <div className="flex gap-3 pt-1">
+        {/* Actions */}
+        <div className="flex gap-2 pt-1">
           <Button
             type="submit"
             loading={loading}

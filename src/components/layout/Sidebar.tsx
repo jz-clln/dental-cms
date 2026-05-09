@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { AppIcon } from '@/components/ui/ToothLogo';
+import { TrialCountdown } from '@/components/trial/TrialCountdown';
 
 const NAV_ITEMS = [
   { href: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
@@ -100,6 +101,9 @@ export function Sidebar() {
           {NAV_ITEMS.map(item => <NavLink key={item.href} item={item} />)}
         </nav>
 
+        {/* Trial countdown — hidden when collapsed */}
+        {!collapsed && <TrialCountdown />}
+
         <div className="p-3 border-t border-gray-100">
           <button
             onClick={handleLogout}
@@ -154,6 +158,10 @@ export function Sidebar() {
             <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
               {NAV_ITEMS.map(item => <NavLink key={item.href} item={item} />)}
             </nav>
+
+            {/* Trial countdown in mobile drawer */}
+            <TrialCountdown />
+
             <div className="p-3 border-t border-gray-100">
               <button
                 onClick={handleLogout}
