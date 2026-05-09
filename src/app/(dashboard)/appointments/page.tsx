@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -11,15 +11,85 @@ import { AppointmentForm } from '@/components/appointments/AppointmentForm';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useAppToast } from '@/app/(dashboard)/layout';
-import { CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarPlus, ChevronDown, Check } from 'lucide-react';
 
 const STATUS_OPTIONS: AppointmentStatus[] = [
-  'Scheduled',
-  'Confirmed',
-  'Done',
-  'No-show',
-  'Cancelled',
+  'Scheduled', 'Confirmed', 'Done', 'No-show', 'Cancelled',
 ];
+
+/* ── Custom Dropdown ── */
+interface DropdownOption { label: string; value: string; }
+
+function CustomDropdown({
+  options,
+  value,
+  onChange,
+  placeholder,
+}: {
+  options: DropdownOption[];
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1 pl-2.5 pr-1.5 py-1.5 rounded-xl border border-gray-200
+          bg-white text-[11px] md:text-[12px] font-medium text-gray-600
+          hover:border-gray-300 transition-colors focus:outline-none
+          focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400
+          whitespace-nowrap max-w-[105px] md:max-w-none"
+      >
+        <span className="truncate">{selected ? selected.label : placeholder}</span>
+        <ChevronDown className={`w-3 h-3 flex-shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 bg-white rounded-xl border border-gray-200
+          shadow-[0_4px_20px_rgba(0,0,0,0.08)] overflow-hidden min-w-[140px] md:min-w-[160px]">
+          {/* All / reset option */}
+          <button
+            type="button"
+            onClick={() => { onChange(''); setOpen(false); }}
+            className="w-full flex items-center justify-between px-3 py-2 text-[12px] text-gray-500
+              hover:bg-gray-50 transition-colors"
+          >
+            {placeholder}
+            {!value && <Check className="w-3 h-3 text-teal-600" />}
+          </button>
+          <div className="h-px bg-gray-100 mx-2" />
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className="w-full flex items-center justify-between px-3 py-2 text-[12px] text-gray-700
+                hover:bg-gray-50 transition-colors"
+            >
+              {opt.label}
+              {value === opt.value && <Check className="w-3 h-3 text-teal-600" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ── helpers ── */
 function getWeekBounds(anchor: Date): { mon: Date; sun: Date } {
@@ -34,20 +104,13 @@ function getWeekBounds(anchor: Date): { mon: Date; sun: Date } {
   return { mon, sun };
 }
 
-function formatWeekLabel(mon: Date, sun: Date): string {
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-  const start = mon.toLocaleDateString('en-US', opts);
-  const end = sun.toLocaleDateString('en-US', { ...opts, year: 'numeric' });
-  return `${start} – ${end}`;
-}
-
 function isSameWeek(a: Date, b: Date): boolean {
   const { mon: monA } = getWeekBounds(a);
   const { mon: monB } = getWeekBounds(b);
   return monA.toDateString() === monB.toDateString();
 }
 
-/* -------------------- CONTENT COMPONENT -------------------- */
+/* ── Content ── */
 function AppointmentsContent() {
   const toast = useAppToast();
   const searchParams = useSearchParams();
@@ -56,47 +119,36 @@ function AppointmentsContent() {
   const [dentists, setDentists]         = useState<Dentist[]>([]);
   const [loading, setLoading]           = useState(true);
   const [clinicId, setClinicId]         = useState<string | null>(null);
-
-  // Week navigation
   const [selectedWeek, setSelectedWeek] = useState<Date>(new Date());
 
   const { mon, sun } = useMemo(() => getWeekBounds(selectedWeek), [selectedWeek]);
-  const weekLabel = useMemo(() => formatWeekLabel(mon, sun), [mon, sun]);
   const isCurrentWeek = useMemo(() => isSameWeek(selectedWeek, new Date()), [selectedWeek]);
 
-  // Filters
   const [filterDentist, setFilterDentist] = useState('');
   const [filterStatus, setFilterStatus]   = useState('');
 
-  // Modals
   const [selectedAppt, setSelectedAppt]       = useState<Appointment | null>(null);
   const [editingAppt, setEditingAppt]         = useState<Appointment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEditModal, setShowEditModal]     = useState(false);
 
-  /* ── load ── */
   const load = useCallback(async () => {
     setLoading(true);
     const supabase = createClient();
 
-    // Fetch clinic ID once (only needed for edit form)
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: staffData } = await supabase
-        .from('staff')
-        .select('clinic_id')
-        .eq('auth_user_id', user.id)
-        .single();
+        .from('staff').select('clinic_id').eq('auth_user_id', user.id).single();
       setClinicId(staffData?.clinic_id ?? null);
     }
 
-    const { mon: weekMon, sun: weekSun } = getWeekBounds(selectedWeek);
-    const weekStart = weekMon.toISOString().split('T')[0];
-    const weekEnd   = weekSun.toISOString().split('T')[0];
+    const weekStart = mon.toISOString().split('T')[0];
+    const weekEnd   = sun.toISOString().split('T')[0];
 
     let query = supabase
       .from('appointments')
-      .select('*, patient:patients(*), dentist:dentists(name, id)')
+      .select('*, patient:patients(*), dentist:dentists(id, first_name, last_name)')
       .gte('appointment_date', weekStart)
       .lte('appointment_date', weekEnd)
       .order('appointment_date', { ascending: true })
@@ -113,136 +165,77 @@ function AppointmentsContent() {
     setAppointments((apptRes.data ?? []) as Appointment[]);
     setDentists((dentistRes.data ?? []) as Dentist[]);
     setLoading(false);
-  }, [filterDentist, filterStatus, selectedWeek]);
+  }, [filterDentist, filterStatus, mon, sun]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Open detail modal if ?id= is in URL
   useEffect(() => {
     const id = searchParams.get('id');
     if (id && appointments.length > 0) {
       const found = appointments.find((a) => a.id === id);
-      if (found) {
-        setSelectedAppt(found);
-        setShowDetailModal(true);
-      }
+      if (found) { setSelectedAppt(found); setShowDetailModal(true); }
     }
   }, [searchParams, appointments]);
 
-  /* ── week navigation ── */
-  function goToPrevWeek() {
-    setSelectedWeek((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() - 7);
-      return d;
-    });
-  }
+  const handleReschedule = useCallback(async (apptId: string, newDate: string, newTime: string) => {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('appointments')
+      .update({ appointment_date: newDate, appointment_time: newTime })
+      .eq('id', apptId);
+    if (error) { toast.error('Failed to reschedule.'); throw error; }
+    toast.success('Appointment rescheduled.');
+    load();
+  }, [load, toast]);
 
-  function goToNextWeek() {
-    setSelectedWeek((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() + 7);
-      return d;
-    });
-  }
-
-  function goToToday() {
-    setSelectedWeek(new Date());
-  }
-
-  /* ── reschedule (drag-drop) ── */
-  const handleReschedule = useCallback(
-    async (apptId: string, newDate: string, newTime: string) => {
-      const supabase = createClient();
-
-      const { error } = await supabase
-        .from('appointments')
-        .update({ appointment_date: newDate, appointment_time: newTime })
-        .eq('id', apptId);
-
-      if (error) {
-        toast.error('Failed to reschedule appointment. Please try again.');
-        throw error;
-      }
-
-      toast.success('Appointment rescheduled successfully.');
-      load();
-    },
-    [load, toast],
-  );
-
-  /* ── modal helpers ── */
-  function openDetail(appt: Appointment) {
-    setSelectedAppt(appt);
-    setShowDetailModal(true);
-  }
-
+  function openDetail(appt: Appointment) { setSelectedAppt(appt); setShowDetailModal(true); }
   function openEdit(appt: Appointment) {
-    setEditingAppt(appt);
-    setShowDetailModal(false);
-    setShowEditModal(true);
+    setEditingAppt(appt); setShowDetailModal(false); setShowEditModal(true);
   }
 
-  const hasFilters = filterDentist || filterStatus;
+  const dentistOptions: DropdownOption[] = dentists.map(d => ({
+    label: d.name,
+    value: d.id,
+  }));
+
+  const statusOptions: DropdownOption[] = STATUS_OPTIONS.map(s => ({
+    label: s,
+    value: s,
+  }));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 justify-between">
-
-        {/* Left: filters */}
-        <div className="flex flex-wrap gap-3 items-center">
-          <select
+      <div className="flex items-center gap-2 justify-between">
+        <div className="flex items-center gap-1.5">
+          <CustomDropdown
+            options={dentistOptions}
             value={filterDentist}
-            onChange={(e) => setFilterDentist(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
-          >
-            <option value="">All Dentists</option>
-            {dentists.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-
-          <select
+            onChange={setFilterDentist}
+            placeholder="All Dentists"
+          />
+          <CustomDropdown
+            options={statusOptions}
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
-          >
-            <option value="">All Statuses</option>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-
-          {hasFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
+            onChange={setFilterStatus}
+            placeholder="All Statuses"
+          />
+          {(filterDentist || filterStatus) && (
+            <button
               onClick={() => { setFilterDentist(''); setFilterStatus(''); }}
+              className="text-[11px] text-gray-400 hover:text-gray-600 px-1.5 py-1 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              Clear filters
-            </Button>
+              Clear
+            </button>
           )}
         </div>
 
-        {/* Right: week nav + new appointment */}
-        <div className="flex items-center gap-2">
-
-
-          {/* Today button — only show when not on current week */}
-          {!isCurrentWeek && (
-            <Button variant="ghost" size="sm" onClick={goToToday}>
-              Today
-            </Button>
-          )}
-
-          <Link href="/appointments/new">
-            <Button size="sm">
-              <CalendarPlus className="w-4 h-4" />
-              New Appointment
-            </Button>
-          </Link>
-        </div>
+        <Link href="/appointments/new" className="flex-shrink-0">
+          <Button size="sm" className="p-1.5 md:text-[12px] md:px-3 md:py-1.5 md:gap-1.5">
+            <CalendarPlus className="w-4 h-4 md:w-3.5 md:h-3.5" />
+            <span className="hidden md:inline">New Appointment</span>
+          </Button>
+        </Link>
       </div>
 
       {/* Calendar */}
@@ -294,10 +287,9 @@ function AppointmentsContent() {
   );
 }
 
-/* -------------------- WRAPPER -------------------- */
 export default function AppointmentsPage() {
   return (
-    <Suspense fallback={<div className="p-4">Loading appointments...</div>}>
+    <Suspense fallback={<div className="p-4 text-sm text-gray-400">Loading appointments…</div>}>
       <AppointmentsContent />
     </Suspense>
   );

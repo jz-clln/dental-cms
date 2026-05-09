@@ -19,6 +19,7 @@ import { AppointmentsEmptyState, ActivityEmptyState, DashboardSkeleton }
   from '@/components/dashboard/EmptyStates';
 import { AppointmentList }        from '@/components/dashboard/AppointmentList';
 import { ActivityFeed }           from '@/components/dashboard/ActivityFeed';
+import { TrialBanner }            from '@/components/trial/TrialBanner';
 
 // ─── Static sub-components ────────────────────────────────────────────────────
 
@@ -57,9 +58,8 @@ function QuickActions() {
 export default function DashboardPage() {
   const { clinicId, loading: clinicLoading } = useClinicId();
 
-  // FIX: all dashboard state lives in useDashboard — page is a thin shell
   const { data, bitey, loading, refreshing, refresh, initialLoaded } = useDashboard(
-  clinicLoading ? null : clinicId,
+    clinicLoading ? null : clinicId,
   );
 
   const { pullY, triggered } = usePullToRefresh(refresh);
@@ -67,7 +67,6 @@ export default function DashboardPage() {
   const { stats, appointments, activity } = data;
   const hasLowStock = stats.lowStockAlerts > 0;
 
-  // FIX: show skeleton during initial load — prevents partial rendering flicker
   if (!initialLoaded) {
     return <DashboardSkeleton />;
   }
@@ -132,6 +131,9 @@ export default function DashboardPage() {
           </svg>
         </button>
       </div>
+
+      {/* Trial Banner */}
+      <TrialBanner />
 
       {/* Bitey */}
       <BiteyCard bitey={bitey} stats={stats} appointments={appointments} />

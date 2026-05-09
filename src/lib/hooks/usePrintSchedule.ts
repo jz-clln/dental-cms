@@ -12,7 +12,7 @@ export function usePrintSchedule() {
     // Fetch today's appointments with patient and dentist info
     const { data, error } = await supabase
       .from('appointments')
-      .select('*, patient:patients(*), dentist:dentists(name)')
+      .select('*, patient:patients(*), dentist:dentists(id, first_name, last_name)')
       .eq('appointment_date', targetDate)
       .order('appointment_time', { ascending: true });
 

@@ -144,7 +144,7 @@ export function AppointmentForm({
         const dentist = dentists.find(d => d.id === form.dentist_id);
         const patient = conflicting.patient as any;
         setConflict({
-          dentistName: dentist?.name ?? 'This dentist',
+          dentistName: dentist ? `${dentist.first_name} ${dentist.last_name}`.trim() : 'This dentist',
           time: form.appointment_time,
           patientName: patient
             ? `${patient.first_name} ${patient.last_name}`
