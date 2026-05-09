@@ -53,7 +53,7 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return patients.filter(p => {
-      const isArchived = (p as any).archived === true;
+      const isArchived = p.archived === true;
 
       const matchSearch = !q ||
         getPatientName(p).toLowerCase().includes(q) ||
@@ -263,7 +263,7 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
                 </tr>
               ) : (
                 sorted.map(patient => {
-                  const isArchived = (patient as any).archived === true;
+                  const isArchived = patient.archived === true;
                   return (
                     <tr
                       key={patient.id}
@@ -273,7 +273,7 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
                             <span className="text-teal-700 text-sm font-semibold">
-                              {patient.first_name[0]}{patient.last_name[0]}
+                              {patient.first_name?.[0] ?? ''}{patient.last_name?.[0] ?? ''}
                             </span>
                           </div>
                           <div>
@@ -355,7 +355,7 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
             </>
           ) : (
             sorted.map(patient => {
-              const isArchived = (patient as any).archived === true;
+              const isArchived = patient.archived === true;
               return (
                 <div
                   key={patient.id}
@@ -363,7 +363,7 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
                 >
                   <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
                     <span className="text-teal-700 font-semibold text-sm">
-                      {patient.first_name[0]}{patient.last_name[0]}
+                      {patient.first_name?.[0] ?? ''}{patient.last_name?.[0] ?? ''}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
@@ -407,8 +407,8 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
             <p className="text-xs text-gray-400">
               Showing {sorted.length} of {patients.filter(p =>
                 showArchived
-                  ? (p as any).archived === true
-                  : (p as any).archived !== true
+                  ? p.archived === true
+                  : p.archived !== true
               ).length} patient{sorted.length !== 1 ? 's' : ''}
             </p>
           </div>
@@ -421,13 +421,13 @@ export function PatientTable({ patients, loading, onRefresh, toast }: PatientTab
         onClose={() => setArchiveTarget(null)}
         onConfirm={handleArchiveToggle}
         loading={archiving}
-        title={(archiveTarget as any)?.archived ? 'Restore Patient' : 'Archive Patient'}
+        title={archiveTarget?.archived ? 'Restore Patient' : 'Archive Patient'}
         message={
-          (archiveTarget as any)?.archived
+          archiveTarget?.archived
             ? `Restore ${getPatientName(archiveTarget!)}? They will appear in the patient list again.`
             : `Archive ${getPatientName(archiveTarget!)}? They will be hidden from all lists but their records are kept. You can restore them anytime from the Archived tab.`
         }
-        confirmLabel={(archiveTarget as any)?.archived ? 'Restore' : 'Archive'}
+        confirmLabel={archiveTarget?.archived ? 'Restore' : 'Archive'}
       />
 
       {/* Permanent delete modal */}

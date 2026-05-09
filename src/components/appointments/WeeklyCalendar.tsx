@@ -53,7 +53,7 @@ function getWeekDates(referenceDate: Date): Date[] {
 }
 
 function toDateStr(d: Date): string {
-  return d.toISOString().split('T')[0];
+  return d.toLocaleDateString('en-CA');
 }
 
 export function WeeklyCalendar({
@@ -85,6 +85,7 @@ export function WeeklyCalendar({
   const [draggingStatus, setDraggingStatus] = useState<string>('Scheduled');
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+  const pointerDownAt = useRef<Record<string, number>>({});
 
   const weekDates = useMemo(() => getWeekDates(referenceDate), [referenceDate]);
   const today = toDateStr(new Date());
@@ -359,9 +360,9 @@ export function WeeklyCalendar({
                           draggable={!!onReschedule}
                           onDragStart={onReschedule ? (e) => handleDragStart(e, appt) : undefined}
                           onDragEnd={onReschedule ? handleDragEnd : undefined}
-                          onPointerDown={() => { (appt as any).__pointerDownAt = Date.now(); }}
+                          onPointerDown={() => { pointerDownAt.current[appt.id] = Date.now(); }}
                           onClick={() => {
-                            const delta = Date.now() - ((appt as any).__pointerDownAt ?? 0);
+                            const delta = Date.now() - (pointerDownAt.current[appt.id] ?? 0);
                             if (delta < 300) onSelectAppointment(appt);
                           }}
                           role="button"
@@ -479,7 +480,7 @@ export function WeeklyCalendar({
                               </p>
                               <p className="text-xs text-gray-500 truncate">
                                 {appt.treatment_type}
-                                {appt.dentist?.name ? ` · ${appt.dentist.name}` : ''}
+                                {appt.dentist?.first_name ? ` · ${appt.dentist.first_name} ${appt.dentist.last_name ?? ''}`.trim() : ''}
                               </p>
                             </div>
                             <Badge label={appt.status} />

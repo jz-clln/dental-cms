@@ -4,12 +4,16 @@ import { getRelativeTime } from '@/lib/utils';
 import { Calendar, Users, Receipt, Package, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const ICONS = {
-  appointment: { icon: Calendar, bg: 'bg-blue-100', color: 'text-blue-600' },
-  patient:     { icon: Users,    bg: 'bg-teal-100', color: 'text-teal-600' },
+const ICONS: Record<ActivityItem['type'], { icon: React.ElementType; bg: string; color: string }> = {
+  appointment: { icon: Calendar, bg: 'bg-blue-100',  color: 'text-blue-600'  },
+  patient:     { icon: Users,    bg: 'bg-teal-100',  color: 'text-teal-600'  },
   payment:     { icon: Receipt,  bg: 'bg-green-100', color: 'text-green-600' },
   inventory:   { icon: Package,  bg: 'bg-amber-100', color: 'text-amber-600' },
 };
+
+// FIX: typed as Record<ActivityItem['type'], ...> so TypeScript enforces
+// exhaustiveness — any new type added to ActivityItem must be handled here.
+const FALLBACK_ICON = { icon: Activity, bg: 'bg-gray-100', color: 'text-gray-400' };
 
 interface ActivityFeedProps {
   items: ActivityItem[];
@@ -31,7 +35,7 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
   return (
     <div className="space-y-1">
       {items.map(item => {
-        const config = ICONS[item.type];
+        const config = ICONS[item.type] ?? FALLBACK_ICON;
         const Icon = config.icon;
         return (
           <div key={item.id} className="flex items-center gap-3 py-3 px-1">
