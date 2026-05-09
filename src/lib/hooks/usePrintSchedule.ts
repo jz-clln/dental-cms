@@ -216,7 +216,7 @@ export function usePrintSchedule() {
                         : ''}
                     </td>
                     <td>${appt.treatment_type}</td>
-                    <td>${appt.dentist?.name ?? '—'}</td>
+                    <td>${appt.dentist ? `${appt.dentist.first_name ?? ''} ${appt.dentist.last_name ?? ''}`.trim() || '—' : '—'}</td>
                     <td>
                       <span class="status-badge" style="background:${STATUS_COLORS[appt.status] ?? '#f1f5f9'}">
                         ${appt.status}
