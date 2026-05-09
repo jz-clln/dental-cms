@@ -125,7 +125,7 @@ export function BillingTable({
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
                           <span className="text-teal-700 text-sm font-semibold">
-                            {s.patient.first_name[0]}{s.patient.last_name[0]}
+                            {s.patient.first_name?.[0] ?? ''}{s.patient.last_name?.[0] ?? ''}
                           </span>
                         </div>
                         <div>
@@ -197,7 +197,7 @@ export function BillingTable({
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
                       <span className="text-teal-700 font-semibold text-sm">
-                        {s.patient.first_name[0]}{s.patient.last_name[0]}
+                        {s.patient.first_name?.[0] ?? ''}{s.patient.last_name?.[0] ?? ''}
                       </span>
                     </div>
                     <div className="min-w-0">

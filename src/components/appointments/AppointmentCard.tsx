@@ -74,13 +74,13 @@ const AppointmentCard = React.memo(function AppointmentCard({
           <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
             <span className="text-teal-700 font-semibold text-sm">
               {appointment.patient
-                ? `${appointment.patient.first_name[0]}${appointment.patient.last_name[0]}`
+                ? `${appointment.patient.first_name?.[0] ?? ''}${appointment.patient.last_name?.[0] ?? ''}` || 'P'
                 : 'P'}
             </span>
           </div>
           <div>
             <p className="font-semibold text-gray-900">{getPatientName(appointment.patient)}</p>
-            {appointment.patient?.contact_number && (
+            {appointment.patient?.contact_number && (          // ← this line
               <p className="text-xs text-gray-500">{appointment.patient.contact_number}</p>
             )}
           </div>
@@ -114,7 +114,9 @@ const AppointmentCard = React.memo(function AppointmentCard({
             <div>
               <p className="text-xs text-gray-400">Dentist</p>
               <p className="text-sm font-medium text-gray-900">
-                {appointment.dentist?.name ?? '—'}
+                {appointment.dentist
+                  ? `${appointment.dentist.first_name} ${appointment.dentist.last_name ?? ''}`.trim()
+                  : '—'}
               </p>
             </div>
           </div>

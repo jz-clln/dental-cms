@@ -6,7 +6,6 @@ import { cookies } from 'next/headers';
 export async function POST(request: NextRequest) {
   const cookieStore = cookies();
 
-  // Verify the user is authenticated
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -31,7 +30,6 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { clinicName, address, contactNumber, email, fullName } = body;
 
-  // Use service role to bypass RLS
   const adminClient = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -48,7 +46,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ alreadyExists: true });
   }
 
-  // Create clinic
+  // Set trial timestamps
+  const trialStartedAt = new Date();
+  const trialEndsAt = new Date(trialStartedAt);
+  trialEndsAt.setDate(trialEndsAt.getDate() + 30);
+
+  // Create clinic with trial dates
   const { data: clinic, error: clinicError } = await adminClient
     .from('clinics')
     .insert({
@@ -56,6 +59,8 @@ export async function POST(request: NextRequest) {
       address: address || null,
       contact_number: contactNumber || null,
       email: email || user.email || null,
+      trial_started_at: trialStartedAt.toISOString(),
+      trial_ends_at: trialEndsAt.toISOString(),
     })
     .select()
     .single();

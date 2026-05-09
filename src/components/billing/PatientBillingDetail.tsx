@@ -37,6 +37,7 @@ export function PatientBillingDetail({
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summary.patient.id]);
 
   async function load() {
@@ -80,7 +81,7 @@ export function PatientBillingDetail({
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
             <span className="text-teal-700 font-semibold">
-              {summary.patient.first_name[0]}{summary.patient.last_name[0]}
+              {summary.patient.first_name?.[0] ?? ''}{summary.patient.last_name?.[0] ?? ''}
             </span>
           </div>
           <div>

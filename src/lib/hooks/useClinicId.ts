@@ -9,19 +9,25 @@ export function useClinicId() {
 
   useEffect(() => {
     const fetchClinicId = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-      const { data } = await supabase
-        .from('staff')
-        .select('clinic_id')
-        .eq('auth_user_id', user.id)
-        .single();
+        const { data } = await supabase
+          .from('staff')
+          .select('clinic_id')
+          .eq('auth_user_id', user.id)
+          .single();
 
-      setClinicId(data?.clinic_id ?? null);
-      setLoading(false);
+        setClinicId(data?.clinic_id ?? null);
+      } catch (err) {
+        console.error('useClinicId error:', err);
+      } finally {
+        setLoading(false);
+      }
     };
+
     fetchClinicId();
   }, []);
 

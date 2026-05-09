@@ -64,7 +64,7 @@ export function TopBar() {
       justify-between sticky top-0 z-30 gap-3">
 
       {/* Left: page title */}
-      <h1 className="text-lg font-semibold text-gray-900 ml-10 md:ml-0 flex-shrink-0 truncate max-w-[120px] md:max-w-none">{title}</h1>
+      <h1 className="text-lg font-semibold text-gray-900 ml-12 md:ml-0 flex-shrink-0 truncate max-w-[120px] md:max-w-none">{title}</h1>
 
       {/* Right: search + print + bell + avatar */}
       <div className="flex items-center gap-3 md:gap-2 min-w-0">

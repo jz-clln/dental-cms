@@ -59,7 +59,7 @@ export default function PatientProfilePage() {
       setClinicId(staffData?.clinic_id ?? null);
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA');
 
     const [patientRes, apptRes, billRes, payRes] = await Promise.all([
       supabase.from('patients').select('*').eq('id', id).single(),
@@ -146,7 +146,7 @@ export default function PatientProfilePage() {
         <CardBody className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-teal-100 flex items-center justify-center flex-shrink-0">
             <span className="text-teal-700 text-2xl font-bold">
-              {patient.first_name[0]}{patient.last_name[0]}
+              {patient.first_name?.[0] ?? ''}{patient.last_name?.[0] ?? ''}
             </span>
           </div>
           <div className="flex-1 min-w-0">
@@ -265,7 +265,7 @@ export default function PatientProfilePage() {
                         <p className="text-xs text-gray-500 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           {formatTime(appt.appointment_time)}
-                          {(appt as any).dentist?.name && ` · ${(appt as any).dentist.name}`}
+                          {appt.dentist && ` · ${[appt.dentist.first_name, appt.dentist.last_name].filter(Boolean).join(' ')}`}
                         </p>
                       </div>
                       <Badge label={appt.status} />

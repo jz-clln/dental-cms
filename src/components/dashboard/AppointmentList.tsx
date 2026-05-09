@@ -12,6 +12,15 @@ interface AppointmentListProps {
   loading?: boolean;
 }
 
+// FIX: DentistJoin has first_name/last_name, not a single name field.
+function getDentistName(dentist: Appointment['dentist']): string {
+  if (!dentist) return '—';
+  const first = dentist.first_name?.trim() ?? '';
+  const last  = dentist.last_name?.trim()  ?? '';
+  if (!first && !last) return '—';
+  return `${first} ${last}`.trim();
+}
+
 export function AppointmentList({ appointments, loading }: AppointmentListProps) {
   if (loading) return <SkeletonTable rows={4} />;
 
@@ -32,15 +41,12 @@ export function AppointmentList({ appointments, loading }: AppointmentListProps)
           href={`/appointments?id=${appt.id}`}
           className="flex items-center gap-4 py-3.5 px-1 hover:bg-gray-50 rounded-lg transition-colors group"
         >
-          {/* Time */}
           <div className="w-16 text-center flex-shrink-0">
             <p className="text-sm font-semibold text-gray-900">{formatTime(appt.appointment_time)}</p>
           </div>
 
-          {/* Divider dot */}
           <div className="w-2 h-2 rounded-full bg-teal-200 flex-shrink-0" />
 
-          {/* Patient + treatment */}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-900 truncate">
               {getPatientName(appt.patient)}
@@ -48,12 +54,10 @@ export function AppointmentList({ appointments, loading }: AppointmentListProps)
             <p className="text-xs text-gray-500 truncate">{appt.treatment_type}</p>
           </div>
 
-          {/* Dentist */}
           <p className="hidden sm:block text-xs text-gray-400 flex-shrink-0 max-w-[100px] truncate">
-            {appt.dentist?.name ?? '—'}
+            {getDentistName(appt.dentist)}
           </p>
 
-          {/* Status */}
           <Badge label={appt.status} />
 
           <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 flex-shrink-0" />

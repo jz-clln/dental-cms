@@ -33,16 +33,34 @@ export interface Dentist {
 export interface Patient {
   id: string;
   clinic_id: string;
-  first_name: string;
-  last_name: string;
+  first_name: string | null;
+  last_name: string | null;
   birthday: string | null;
   address: string | null;
   contact_number: string | null;
   email: string | null;
+  archived: boolean;   // add this
   created_at: string;
 }
 
 export type AppointmentStatus = 'Scheduled' | 'Confirmed' | 'Done' | 'No-show' | 'Cancelled';
+
+// FIX: joined patient/dentist fields use partial join shapes, not the full
+// interface. Queries only select specific columns (first_name, last_name etc.)
+// so typing them as the full Patient/Dentist interface was falsely broad —
+// accessing e.g. patient.clinic_id on a join result would be undefined at
+// runtime even though TypeScript wouldn't complain.
+export interface PatientJoin {
+  first_name: string | null;
+  last_name: string | null;
+  contact_number: string | null;
+}
+
+export interface DentistJoin {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+}
 
 export interface Appointment {
   id: string;
@@ -55,9 +73,9 @@ export interface Appointment {
   status: AppointmentStatus;
   notes: string | null;
   created_at: string;
-  // Joined fields
-  patient?: Patient;
-  dentist?: Dentist;
+  // Joined fields — partial shapes matching actual SELECT columns
+  patient?: PatientJoin;
+  dentist?: DentistJoin;
 }
 
 export interface VisitNote {
@@ -79,7 +97,7 @@ export interface InventoryItem {
   reorder_level: number;
   last_restocked: string | null;
   created_at: string;
-  is_low_stock?: boolean; // computed
+  is_low_stock?: boolean;
 }
 
 export interface Billing {
@@ -90,7 +108,7 @@ export interface Billing {
   treatment_description: string;
   amount_charged: number;
   created_at: string;
-  patient?: Patient;
+  patient?: PatientJoin;
 }
 
 export type PaymentMethod = 'Cash' | 'GCash' | 'Maya' | 'Card';
@@ -104,7 +122,7 @@ export interface Payment {
   payment_date: string;
   notes: string | null;
   created_at: string;
-  patient?: Patient;
+  patient?: PatientJoin;
 }
 
 export type BillingStatus = 'Paid' | 'Partial' | 'Unpaid';
@@ -118,7 +136,7 @@ export interface PatientBillingSummary {
 }
 
 // ============================================================
-// FORM TYPES (for new/edit forms)
+// FORM TYPES
 // ============================================================
 
 export interface PatientFormData {
