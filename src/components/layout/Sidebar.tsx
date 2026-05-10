@@ -61,13 +61,13 @@ export function Sidebar() {
         href={item.href}
         onClick={() => setMobileOpen(false)}
         className={cn(
-          'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
+          'flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium transition-all',
           active
             ? 'bg-teal-700 text-white shadow-sm'
             : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
         )}
       >
-        <item.icon className="w-5 h-5 flex-shrink-0" />
+        <item.icon className="w-[18px] h-[18px] flex-shrink-0" />
         {!collapsed && <span>{item.label}</span>}
       </Link>
     );
@@ -97,7 +97,7 @@ export function Sidebar() {
       )}>
         <BrandHeader showFull={!collapsed} />
 
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           {NAV_ITEMS.map(item => <NavLink key={item.href} item={item} />)}
         </nav>
 
@@ -108,12 +108,12 @@ export function Sidebar() {
           <button
             onClick={handleLogout}
             className={cn(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+              'flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium',
               'text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors w-full',
               collapsed && 'justify-center'
             )}
           >
-            <LogOut className="w-5 h-5 flex-shrink-0" />
+            <LogOut className="w-[18px] h-[18px] flex-shrink-0" />
             {!collapsed && 'Log Out'}
           </button>
         </div>
@@ -155,7 +155,7 @@ export function Sidebar() {
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+            <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
               {NAV_ITEMS.map(item => <NavLink key={item.href} item={item} />)}
             </nav>
 
@@ -165,10 +165,10 @@ export function Sidebar() {
             <div className="p-3 border-t border-gray-100">
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+                className="flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium
                   text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors w-full"
               >
-                <LogOut className="w-5 h-5" /> Log Out
+                <LogOut className="w-[18px] h-[18px]" /> Log Out
               </button>
             </div>
           </div>
