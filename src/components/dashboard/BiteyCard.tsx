@@ -46,8 +46,8 @@ export const BiteyCard = memo(function BiteyCard({ bitey, stats, appointments }:
         <div className="flex-1 min-w-0 py-3 pr-3 pl-1.5">
 
           {/* Badge */}
-          <div className="inline-flex items-center gap-1.5 mb-2 text-[9px] font-medium tracking-[0.1em] uppercase text-white bg-white/15 border border-white/25 px-2 py-[2px] rounded-full">
-            <span className="w-[4px] h-[4px] rounded-full bg-white opacity-90" />
+          <div className="inline-flex items-center gap-1.5 mb-2 text-[9px] font-medium tracking-[0.1em] uppercase text-white bg-white/15 border border-white/25 px-2 py-[2px] rounded-full leading-none">
+            <span className="inline-block w-[4px] h-[4px] rounded-full bg-white flex-shrink-0 mt-[0.5px]" />
             Clinic assistant
           </div>
 
