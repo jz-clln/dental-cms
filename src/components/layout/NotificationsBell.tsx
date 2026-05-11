@@ -86,16 +86,17 @@ export function NotificationsBell() {
     const timeHour = `${inOneHour.getHours().toString().padStart(2, '0')}:${inOneHour.getMinutes().toString().padStart(2, '0')}`;
 
     const [inventoryRes, appointmentsRes, billRes, payRes, patientsRes] = await Promise.all([
-      supabase.from('inventory_items').select('item_name, quantity, reorder_level'),
+      supabase.from('inventory_items').select('item_name, quantity, reorder_level').eq('clinic_id', clinicId),
       supabase.from('appointments')
         .select('*, patient:patients(first_name, last_name)')
+        .eq('clinic_id', clinicId)
         .eq('appointment_date', todayStr)
         .in('status', ['Scheduled', 'Confirmed'])
         .gte('appointment_time', timeNow)
         .lte('appointment_time', timeHour),
-      supabase.from('billing').select('patient_id, amount_charged'),
-      supabase.from('payments').select('patient_id, amount_paid'),
-      supabase.from('patients').select('id, first_name, last_name').eq('archived', false),
+      supabase.from('billing').select('patient_id, amount_charged').eq('clinic_id', clinicId),
+      supabase.from('payments').select('patient_id, amount_paid').eq('clinic_id', clinicId),
+      supabase.from('patients').select('id, first_name, last_name').eq('clinic_id', clinicId).eq('archived', false),
     ]);
 
     const toInsert: Omit<Notification, 'id' | 'created_at'>[] = [];
@@ -157,13 +158,16 @@ export function NotificationsBell() {
       }
     }
 
-    // Clear old unread notifications of same types then insert fresh ones
+    // FIX: Only delete the specific types we're about to re-insert, never wipe everything
     if (toInsert.length > 0) {
+      const typesToReplace = [...new Set(toInsert.map((n: any) => n.type))];
+
       await supabase
         .from('notifications')
         .delete()
         .eq('clinic_id', clinicId)
-        .eq('read', false);
+        .eq('read', false)
+        .in('type', typesToReplace);
 
       await supabase.from('notifications').insert(toInsert);
     }
@@ -172,10 +176,16 @@ export function NotificationsBell() {
     setGenerating(false);
   }, [clinicId, loadNotifications]);
 
-  // Load on mount and when clinicId is ready
+  // FIX: Load on mount (silent), generate on open
   useEffect(() => {
-    if (clinicId) loadNotifications();
+    if (!clinicId) return;
+    loadNotifications();
   }, [clinicId, loadNotifications]);
+
+  useEffect(() => {
+    if (!clinicId || !open) return;
+    generateNotifications();
+  }, [clinicId, open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Realtime subscription
   useEffect(() => {
@@ -187,6 +197,7 @@ export function NotificationsBell() {
         event: '*',
         schema: 'public',
         table: 'notifications',
+        filter: `clinic_id=eq.${clinicId}`,
       }, () => {
         loadNotifications();
       })
@@ -241,14 +252,9 @@ export function NotificationsBell() {
         title="Notifications"
       >
         <Bell className="w-5 h-5" />
+        {/* FIX: plain red dot, no number, positioned on bell icon not container */}
         {unreadCount > 0 && (
-          <span className={cn(
-            'absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1',
-            'bg-red-500 text-white text-[10px] font-bold rounded-full',
-            'flex items-center justify-center leading-none',
-          )}>
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white pointer-events-none" />
         )}
         {generating && (
           <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-teal-500 rounded-full
