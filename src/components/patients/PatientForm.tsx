@@ -8,6 +8,8 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { useUnsavedChanges } from '@/lib/hooks/useUnsavedChanges';
+import { ShieldCheck } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface PatientFormProps {
   clinicId: string;
@@ -25,6 +27,7 @@ interface FormErrors {
   last_name?: string;
   contact_number?: string;
   email?: string;
+  consent?: string;
 }
 
 const EMPTY_FORM: PatientFormData = {
@@ -38,33 +41,42 @@ const EMPTY_FORM: PatientFormData = {
 
 export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: PatientFormProps) {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]     = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [form, setForm] = useState<PatientFormData>({
-    first_name: existing?.first_name ?? '',
-    last_name: existing?.last_name ?? '',
-    birthday: existing?.birthday ?? '',
-    address: existing?.address ?? '',
+    first_name:     existing?.first_name     ?? '',
+    last_name:      existing?.last_name      ?? '',
+    birthday:       existing?.birthday       ?? '',
+    address:        existing?.address        ?? '',
     contact_number: existing?.contact_number ?? '',
-    email: existing?.email ?? '',
+    email:          existing?.email          ?? '',
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
 
-  // Detect if any field has been changed from initial state
+  // Consent — only required for new patients, pre-filled for existing
+  const [consentGiven, setConsentGiven] = useState<boolean>(
+    (existing as any)?.consent_given ?? false
+  );
+
+  // Dirty check
   const initial = existing
-    ? { first_name: existing.first_name, last_name: existing.last_name,
-        birthday: existing.birthday ?? '', address: existing.address ?? '',
-        contact_number: existing.contact_number ?? '', email: existing.email ?? '' }
+    ? {
+        first_name:     existing.first_name,
+        last_name:      existing.last_name,
+        birthday:       existing.birthday       ?? '',
+        address:        existing.address        ?? '',
+        contact_number: existing.contact_number ?? '',
+        email:          existing.email          ?? '',
+      }
     : EMPTY_FORM;
 
   const isDirty = !submitted && Object.keys(form).some(
     k => form[k as keyof PatientFormData] !== initial[k as keyof PatientFormData]
   );
 
-  // Show confirm modal when back button is pressed
   const handleBack = useCallback(() => setShowConfirm(true), []);
   useUnsavedChanges(isDirty, handleBack);
 
@@ -78,12 +90,16 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
   function validate(): boolean {
     const newErrors: FormErrors = {};
     if (!form.first_name.trim()) newErrors.first_name = 'First name is required.';
-    if (!form.last_name.trim()) newErrors.last_name = 'Last name is required.';
+    if (!form.last_name.trim())  newErrors.last_name  = 'Last name is required.';
     if (form.contact_number && !/^[0-9+\-\s()]{7,15}$/.test(form.contact_number)) {
       newErrors.contact_number = 'Enter a valid phone number.';
     }
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       newErrors.email = 'Enter a valid email address.';
+    }
+    // Consent required only for new patients
+    if (!existing && !consentGiven) {
+      newErrors.consent = 'Patient consent is required before adding a record.';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -95,27 +111,51 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
     setLoading(true);
 
     const supabase = createClient();
+    const now = new Date().toISOString();
+
     const payload = {
-      clinic_id: clinicId,
-      first_name: form.first_name.trim(),
-      last_name: form.last_name.trim(),
-      birthday: form.birthday || null,
-      address: form.address.trim() || null,
+      clinic_id:      clinicId,
+      first_name:     form.first_name.trim(),
+      last_name:      form.last_name.trim(),
+      birthday:       form.birthday       || null,
+      address:        form.address.trim() || null,
       contact_number: form.contact_number.trim() || null,
-      email: form.email.trim() || null,
+      email:          form.email.trim()   || null,
+      // Always write consent on new patients; preserve existing on edit
+      ...(!existing && {
+        consent_given:    true,
+        consent_given_at: now,
+      }),
     };
 
     if (existing) {
       const { data, error } = await supabase
-        .from('patients').update(payload).eq('id', existing.id).select().single();
-      if (error) { toast.error('Failed to update patient. Please try again.'); setLoading(false); return; }
+        .from('patients')
+        .update(payload)
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error) {
+        toast.error('Failed to update patient. Please try again.');
+        setLoading(false);
+        return;
+      }
       setSubmitted(true);
       toast.success('Patient updated successfully.');
       onSuccess?.(data as Patient);
     } else {
       const { data, error } = await supabase
-        .from('patients').insert(payload).select().single();
-      if (error) { toast.error('Failed to add patient. Please try again.'); setLoading(false); return; }
+        .from('patients')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) {
+        toast.error('Failed to add patient. Please try again.');
+        setLoading(false);
+        return;
+      }
       setSubmitted(true);
       toast.success(`${form.first_name} ${form.last_name} has been added.`);
       onSuccess?.(data as Patient);
@@ -136,6 +176,8 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
+
+        {/* Name */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="First Name"
@@ -155,6 +197,7 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
           />
         </div>
 
+        {/* Birthday & Contact */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Birthday"
@@ -171,6 +214,7 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
           />
         </div>
 
+        {/* Email */}
         <Input
           label="Email Address"
           type="email"
@@ -180,6 +224,7 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
           error={errors.email}
         />
 
+        {/* Address */}
         <Textarea
           label="Home Address"
           placeholder="123 Mabini St., Calamba City, Laguna"
@@ -188,6 +233,49 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
           rows={2}
         />
 
+        {/* ── Consent checkbox — new patients only ── */}
+        {!existing && (
+          <div className={cn(
+            'rounded-xl border p-4 transition-colors',
+            consentGiven
+              ? 'bg-teal-50 border-teal-200'
+              : errors.consent
+              ? 'bg-red-50 border-red-200'
+              : 'bg-gray-50 border-gray-200'
+          )}>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={consentGiven}
+                onChange={e => {
+                  setConsentGiven(e.target.checked);
+                  if (errors.consent) setErrors(p => ({ ...p, consent: undefined }));
+                }}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-700 focus:ring-teal-500 flex-shrink-0"
+              />
+              <span className="text-sm text-gray-700 leading-snug">
+                The patient has been informed about how their data will be collected,
+                stored, and used by this clinic in accordance with the{' '}
+                <strong className="text-gray-800">Data Privacy Act of 2012 (RA 10173)</strong>.
+              </span>
+            </label>
+
+            {/* Consent confirmation row */}
+            {consentGiven && (
+              <div className="flex items-center gap-1.5 mt-2.5 ml-7 text-xs text-teal-700 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Consent will be recorded with today's date and time.
+              </div>
+            )}
+
+            {/* Error */}
+            {errors.consent && (
+              <p className="mt-2 ml-7 text-xs text-red-500">{errors.consent}</p>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
         <div className="flex gap-3 pt-2">
           <Button type="submit" loading={loading} className="flex-1 sm:flex-none">
             {existing ? 'Save Changes' : 'Add Patient'}
@@ -198,6 +286,7 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
             </Button>
           )}
         </div>
+
       </form>
 
       <UnsavedChangesModal
