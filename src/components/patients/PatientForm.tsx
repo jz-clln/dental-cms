@@ -253,7 +253,7 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
                 }}
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-700 focus:ring-teal-500 flex-shrink-0"
               />
-              <span className="text-sm text-gray-700 leading-snug">
+              <span className="text-xs text-gray-700 leading-tight">
                 The patient has been informed about how their data will be collected,
                 stored, and used by this clinic in accordance with the{' '}
                 <strong className="text-gray-800">Data Privacy Act of 2012 (RA 10173)</strong>.
