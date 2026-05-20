@@ -143,15 +143,15 @@ export default function PatientProfilePage() {
 
       {/* Patient header */}
       <Card>
-        <CardBody className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-teal-100 flex items-center justify-center flex-shrink-0">
-            <span className="text-teal-700 text-2xl font-bold">
+        <CardBody className="flex flex-col sm:flex-row items-start sm:items-center gap-3 py-3">
+          <div className="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0">
+            <span className="text-teal-700 text-lg font-bold">
               {patient.first_name?.[0] ?? ''}{patient.last_name?.[0] ?? ''}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-bold text-gray-900">{getPatientName(patient)}</h2>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5">
+            <h2 className="text-base font-bold text-gray-900">{getPatientName(patient)}</h2>
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
               {age !== null && (
                 <span className="text-sm text-gray-500 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5" /> {age} years old
