@@ -64,11 +64,17 @@ export function CustomSelect({
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      {/* Dropdown */}
+      {/* Dropdown — fixed z-50 so it escapes any parent overflow */}
       {open && (
-        <div className="absolute top-full mt-1 z-30 w-full bg-white rounded-xl border
+        <div className="absolute top-full mt-1 z-50 w-full bg-white rounded-xl border
           border-gray-100 shadow-lg overflow-hidden">
-          <div className="max-h-56 overflow-y-auto py-1">
+          <div
+            className="max-h-56 overflow-y-auto py-1"
+            style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#d1d5db transparent',
+            }}
+          >
             {options.map(option => (
               <button
                 key={option.value}

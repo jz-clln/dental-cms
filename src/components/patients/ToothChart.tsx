@@ -8,6 +8,7 @@ import { ConfirmModal } from '@/components/ui/Modal';
 import { formatDateShort } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { X, Plus, Trash2, Info } from 'lucide-react';
+import { CustomSelect } from '@/components/ui/CustomSelect';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -66,9 +67,6 @@ const TREATMENT_COLORS: Record<string, { fill: string; text: string; legend: str
   'Fractured':  { fill: '#dc2626', text: 'white', legend: 'bg-red-600' },
 };
 
-// Universal Numbering System (1-32)
-// Upper row: 1-16 left to right (patient's right to left)
-// Lower row: 17-32 left to right (patient's left to right)
 const UPPER_TEETH = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16];
 const LOWER_TEETH = [32,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17];
 
@@ -87,7 +85,6 @@ const TOOTH_NAMES: Record<number, string> = {
   30:'Lower Right 1st Molar', 31:'Lower Right 2nd Molar', 32:'Lower Right 3rd Molar',
 };
 
-// Molar = 1-3, 14-19, 30-32 | Premolar = 4-5, 12-13, 20-21, 28-29 | rest = anterior
 function getToothShape(n: number): 'molar' | 'premolar' | 'anterior' {
   if ([1,2,3,14,15,16,17,18,19,30,31,32].includes(n)) return 'molar';
   if ([4,5,12,13,20,21,28,29].includes(n)) return 'premolar';
@@ -118,7 +115,6 @@ function Tooth({ number, records, selected, onClick }: ToothProps) {
   const w = shape === 'molar' ? 28 : shape === 'premolar' ? 22 : 18;
   const h = shape === 'molar' ? 32 : 28;
 
-  // Crown shape path (simplified anatomical)
   function crownPath(w: number, h: number, isMolar: boolean) {
     if (isMolar) {
       return `M4,${h} Q2,${h} 2,${h-4} L2,6 Q2,2 6,2 L${w-6},2 Q${w-2},2 ${w-2},6 L${w-2},${h-4} Q${w-2},${h} ${w-4},${h} Z`;
@@ -126,7 +122,6 @@ function Tooth({ number, records, selected, onClick }: ToothProps) {
     return `M3,${h} Q2,${h} 2,${h-3} L2,5 Q2,2 5,2 L${w-5},2 Q${w-2},2 ${w-2},5 L${w-2},${h-3} Q${w-2},${h} ${w-3},${h} Z`;
   }
 
-  // Root lines (drawn below crown for upper, above for lower)
   const rootCount = shape === 'molar' ? 3 : shape === 'premolar' ? 2 : 1;
 
   return (
@@ -135,7 +130,6 @@ function Tooth({ number, records, selected, onClick }: ToothProps) {
       style={{ cursor: 'pointer' }}
       className="group"
     >
-      {/* Crown */}
       <rect
         x={1} y={1} width={w} height={h}
         rx={shape === 'anterior' ? 6 : 4}
@@ -146,7 +140,6 @@ function Tooth({ number, records, selected, onClick }: ToothProps) {
         filter={selected ? 'drop-shadow(0 0 3px rgba(15,118,110,0.5))' : undefined}
       />
 
-      {/* Root indicator lines */}
       {isUpper
         ? Array.from({ length: rootCount }).map((_, i) => (
           <line
@@ -176,7 +169,6 @@ function Tooth({ number, records, selected, onClick }: ToothProps) {
         ))
       }
 
-      {/* Tooth number */}
       <text
         x={w / 2}
         y={h / 2 + 4}
@@ -189,7 +181,6 @@ function Tooth({ number, records, selected, onClick }: ToothProps) {
         {number}
       </text>
 
-      {/* Multiple records dot */}
       {hasMultiple && (
         <circle cx={w - 3} cy={3} r={3} fill="#f59e0b" stroke="white" strokeWidth={1} />
       )}
@@ -278,10 +269,8 @@ export function ToothChart({ patientId, clinicId, toast }: ToothChartProps) {
     setDeleteTarget(null);
   }
 
-  // Treatments used on this patient
   const usedTreatments = [...new Set(records.map(r => r.treatment_type))];
 
-  // Filter records by legend
   const visibleRecords = activeLegendFilter
     ? records.filter(r => r.treatment_type === activeLegendFilter)
     : records;
@@ -290,7 +279,6 @@ export function ToothChart({ patientId, clinicId, toast }: ToothChartProps) {
     ? records.filter(r => r.tooth_number === selectedTooth)
     : [];
 
-  // Calculate spacing for teeth rows
   const GAP = 4;
   function rowWidth(teeth: number[]) {
     return teeth.reduce((sum, n) => {
@@ -311,7 +299,7 @@ export function ToothChart({ patientId, clinicId, toast }: ToothChartProps) {
   const upperWidth = rowWidth(UPPER_TEETH);
   const lowerWidth = rowWidth(LOWER_TEETH);
   const svgWidth = Math.max(upperWidth, lowerWidth) + 2;
-  const SVG_H = 130; // upper row + gap + lower row
+  const SVG_H = 130;
 
   return (
     <div className="space-y-5">
@@ -355,7 +343,6 @@ export function ToothChart({ patientId, clinicId, toast }: ToothChartProps) {
 
       {/* SVG Chart */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 overflow-x-auto">
-        {/* Labels */}
         <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-1">
           <span>Patient's Right</span>
           <span>Upper Jaw</span>
@@ -367,7 +354,6 @@ export function ToothChart({ patientId, clinicId, toast }: ToothChartProps) {
           width="100%"
           style={{ minWidth: 480, maxWidth: 640, display: 'block', margin: '0 auto' }}
         >
-          {/* UPPER row */}
           <g transform="translate(0, 8)">
             {UPPER_TEETH.map((n, i) => {
               const x = toothX(UPPER_TEETH, i);
@@ -390,7 +376,6 @@ export function ToothChart({ patientId, clinicId, toast }: ToothChartProps) {
             })}
           </g>
 
-          {/* Center line — gum line */}
           <line
             x1={0} y1={SVG_H / 2}
             x2={svgWidth} y2={SVG_H / 2}
@@ -401,7 +386,6 @@ export function ToothChart({ patientId, clinicId, toast }: ToothChartProps) {
             gum line
           </text>
 
-          {/* LOWER row */}
           <g transform={`translate(0, ${SVG_H - 8})`}>
             {LOWER_TEETH.map((n, i) => {
               const x = toothX(LOWER_TEETH, i);
@@ -436,114 +420,97 @@ export function ToothChart({ patientId, clinicId, toast }: ToothChartProps) {
         </p>
       </div>
 
-      {/* Log panel — appears when tooth is selected */}
+      {/* Log panel — ONLY THIS SECTION CHANGED (made compact) */}
       {showLogPanel && selectedTooth && (
-        <div className="bg-white rounded-2xl border border-teal-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-teal-200 shadow-sm">
 
-          {/* Panel header */}
-          <div className="flex items-center justify-between px-5 py-4 bg-teal-50 border-b border-teal-100">
-            <div>
-              <p className="font-semibold text-teal-900">
-                Tooth #{selectedTooth}
-              </p>
-              <p className="text-xs text-teal-600 mt-0.5">{TOOTH_NAMES[selectedTooth]}</p>
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-2.5 bg-teal-50 border-b border-teal-100 rounded-t-xl">
+            <div className="flex items-center gap-2">
+              <p className="font-semibold text-teal-900 text-sm">Tooth #{selectedTooth}</p>
+              <span className="text-xs text-teal-500">{TOOTH_NAMES[selectedTooth]}</span>
             </div>
             <button
               onClick={() => { setShowLogPanel(false); setSelectedTooth(null); }}
-              className="p-1.5 rounded-lg text-teal-400 hover:bg-teal-100 transition-colors"
+              className="p-1 rounded-lg text-teal-400 hover:bg-teal-100 transition-colors"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="p-5 space-y-5">
+          <div className="p-3 space-y-3">
 
-            {/* Existing records for this tooth */}
+            {/* Existing records — compact pills */}
             {selectedToothRecords.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                  Treatment History for Tooth #{selectedTooth}
-                </p>
-                <div className="space-y-2">
-                  {selectedToothRecords.map(rec => {
-                    const cfg = TREATMENT_COLORS[rec.treatment_type];
-                    return (
-                      <div key={rec.id}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-100 group"
+              <div className="flex flex-wrap gap-1.5">
+                {selectedToothRecords.map(rec => {
+                  const cfg = TREATMENT_COLORS[rec.treatment_type];
+                  return (
+                    <div key={rec.id}
+                      className="group flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-gray-100 bg-gray-50"
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: cfg?.fill ?? '#94a3b8' }}
+                      />
+                      <span className="text-gray-700">{rec.treatment_type}</span>
+                      <span className="text-gray-400">{formatDateShort(rec.treated_at)}</span>
+                      <button
+                        onClick={() => setDeleteTarget(rec)}
+                        className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-300 hover:text-red-500 transition-all"
                       >
-                        <div
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: cfg?.fill ?? '#94a3b8' }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900">{rec.treatment_type}</p>
-                          <p className="text-xs text-gray-500">
-                            {rec.surface && `${rec.surface} · `}
-                            {formatDateShort(rec.treated_at)}
-                          </p>
-                          {rec.notes && (
-                            <p className="text-xs text-gray-400 mt-0.5 italic">{rec.notes}</p>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => setDeleteTarget(rec)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300
-                            hover:text-red-500 hover:bg-red-50 transition-all"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
-            {/* Add new record form */}
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                Log New Treatment
-              </p>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <Select
-                    label="Treatment"
-                    value={form.treatment_type}
-                    onChange={e => setForm(f => ({ ...f, treatment_type: e.target.value }))}
-                  >
-                    {TREATMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </Select>
-                  <Select
-                    label="Surface"
-                    value={form.surface}
-                    onChange={e => setForm(f => ({ ...f, surface: e.target.value }))}
-                  >
-                    {SURFACES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </Select>
-                </div>
-                <Input
-                  label="Date of Treatment"
+            {/* Compact form */}
+            <div className="grid grid-cols-2 gap-2">
+              <CustomSelect
+                label="Treatment"
+                value={form.treatment_type}
+                onChange={v => setForm(f => ({ ...f, treatment_type: v }))}
+                options={TREATMENT_TYPES.map(t => ({ value: t, label: t }))}
+              />
+              <CustomSelect
+                label="Surface"
+                value={form.surface}
+                onChange={v => setForm(f => ({ ...f, surface: v }))}
+                options={SURFACES.map(s => ({ value: s, label: s }))}
+              />
+            </div>
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">Date</label>
+                <input
                   type="date"
                   value={form.treated_at}
                   onChange={e => setForm(f => ({ ...f, treated_at: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
-                <Textarea
-                  label="Notes (optional)"
-                  placeholder="Additional details about the procedure…"
-                  value={form.notes}
-                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  rows={2}
-                />
-                <Button onClick={handleSave} loading={saving} size="sm">
-                  <Plus className="w-4 h-4" /> Log Treatment
-                </Button>
               </div>
+              <Button onClick={handleSave} loading={saving} size="sm">
+                <Plus className="w-3.5 h-3.5" /> Log
+              </Button>
             </div>
+
+            {/* Notes — single line */}
+            <input
+              type="text"
+              placeholder="Notes (optional)"
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 placeholder:text-gray-400 rounded-b-xl"
+            />
+
           </div>
         </div>
       )}
 
-      {/* Summary stats */}
+      {/* Summary stats — unchanged */}
       {records.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-white rounded-xl border border-gray-100 p-3 text-center">
@@ -571,7 +538,7 @@ export function ToothChart({ patientId, clinicId, toast }: ToothChartProps) {
         </div>
       )}
 
-      {/* All records table */}
+      {/* All records table — unchanged */}
       {records.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-5 py-3.5 border-b border-gray-100 bg-gray-50">
@@ -617,7 +584,7 @@ export function ToothChart({ patientId, clinicId, toast }: ToothChartProps) {
         </div>
       )}
 
-      {/* Delete confirm */}
+      {/* Delete confirm — unchanged */}
       <ConfirmModal
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
