@@ -39,6 +39,9 @@ export default function PatientProfilePage() {
   const [clinicId, setClinicId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
 
+  // Tooth count badge
+  const [toothTreatedCount, setToothTreatedCount] = useState(0);
+
   const [showEditModal, setShowEditModal] = useState(false);
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [newNote, setNewNote] = useState('');
@@ -61,7 +64,7 @@ export default function PatientProfilePage() {
 
     const today = new Date().toLocaleDateString('en-CA');
 
-    const [patientRes, apptRes, billRes, payRes] = await Promise.all([
+    const [patientRes, apptRes, billRes, payRes, toothRes] = await Promise.all([
       supabase.from('patients').select('*').eq('id', id).single(),
       supabase.from('appointments')
         .select('*, dentist:dentists(id, first_name, last_name)')
@@ -71,6 +74,7 @@ export default function PatientProfilePage() {
         .limit(5),
       supabase.from('billing').select('*').eq('patient_id', id),
       supabase.from('payments').select('*').eq('patient_id', id),
+      supabase.from('tooth_records').select('tooth_number').eq('patient_id', id),
     ]);
 
     if (patientRes.error || !patientRes.data) {
@@ -83,6 +87,11 @@ export default function PatientProfilePage() {
     setAppointments((apptRes.data ?? []) as Appointment[]);
     setBilling((billRes.data ?? []) as Billing[]);
     setPayments((payRes.data ?? []) as Payment[]);
+
+    // Count unique treated teeth
+    const uniqueTeeth = new Set((toothRes.data ?? []).map((r: any) => r.tooth_number));
+    setToothTreatedCount(uniqueTeeth.size);
+
     setLoading(false);
   }
 
@@ -114,8 +123,12 @@ export default function PatientProfilePage() {
 
   const PROFILE_TABS: { id: ProfileTab; label: string; icon: React.ElementType }[] = [
     { id: 'overview', label: 'Overview', icon: User },
-    { id: 'chart',    label: 'Tooth Chart', icon: Calendar },
-    { id: 'history',  label: 'History', icon: Clock },
+    {
+      id: 'chart',
+      label: toothTreatedCount > 0 ? `Tooth Chart (${toothTreatedCount})` : 'Tooth Chart',
+      icon: Calendar,
+    },
+    { id: 'history', label: 'History', icon: Clock },
   ];
 
   if (loading) {
@@ -174,7 +187,7 @@ export default function PatientProfilePage() {
               )}
             </div>
             {patient.birthday && (
-              <p className="text-xs text-gray-400 mt-1">Birthday: {formatDate(patient.birthday)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Birthday: {formatDate(patient.birthday)}</p>
             )}
           </div>
           <div className="flex gap-2 flex-shrink-0">
@@ -190,19 +203,19 @@ export default function PatientProfilePage() {
       </Card>
 
       {/* Tab navigation */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-1.5 flex gap-1">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-1 flex gap-1">
         {PROFILE_TABS.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all flex-1 justify-center',
+              'flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all flex-1 justify-center',
               activeTab === tab.id
                 ? 'bg-teal-700 text-white shadow-sm'
                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
             )}
           >
-            <tab.icon className="w-4 h-4 flex-shrink-0" />
+            <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
             {tab.label}
           </button>
         ))}
