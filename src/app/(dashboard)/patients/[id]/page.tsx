@@ -157,32 +157,32 @@ export default function PatientProfilePage() {
       {/* Patient header */}
       <Card>
         <CardBody className="flex flex-col sm:flex-row items-start sm:items-center gap-3 py-3">
-          <div className="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0">
-            <span className="text-teal-700 text-lg font-bold">
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0">
+            <span className="text-teal-700 text-sm sm:text-lg font-bold">
               {patient.first_name?.[0] ?? ''}{patient.last_name?.[0] ?? ''}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-base font-bold text-gray-900">{getPatientName(patient)}</h2>
+            <h2 className="text-sm sm:text-base font-bold text-gray-900">{getPatientName(patient)}</h2>
             <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
               {age !== null && (
-                <span className="text-sm text-gray-500 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5" /> {age} years old
+                <span className="text-xs sm:text-sm text-gray-500 flex items-center gap-1">
+                  <User className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> {age} years old
                 </span>
               )}
               {patient.contact_number && (
-                <span className="text-sm text-gray-500 flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5" /> {patient.contact_number}
+                <span className="text-xs sm:text-sm text-gray-500 flex items-center gap-1">
+                  <Phone className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> {patient.contact_number}
                 </span>
               )}
               {patient.email && (
-                <span className="text-sm text-gray-500 flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5" /> {patient.email}
+                <span className="text-xs sm:text-sm text-gray-500 flex items-center gap-1">
+                  <Mail className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> {patient.email}
                 </span>
               )}
               {patient.address && (
-                <span className="text-sm text-gray-500 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5" /> {patient.address}
+                <span className="text-xs sm:text-sm text-gray-500 flex items-center gap-1">
+                  <MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> {patient.address}
                 </span>
               )}
             </div>
@@ -190,12 +190,13 @@ export default function PatientProfilePage() {
               <p className="text-xs text-gray-400 mt-0.5">Birthday: {formatDate(patient.birthday)}</p>
             )}
           </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <Button variant="secondary" size="sm" onClick={() => setShowEditModal(true)}>
-              <Pencil className="w-3.5 h-3.5" /> Edit
+          <div className="flex gap-1.5 flex-shrink-0">
+            <Button variant="secondary" size="sm" onClick={() => setShowEditModal(true)} className="text-xs sm:text-sm px-2 sm:px-3">
+              <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <span className="hidden sm:inline">Edit</span>
             </Button>
-            <Button size="sm" onClick={() => router.push(`/appointments/new?patient_id=${patient.id}`)}>
-              <CalendarPlus className="w-3.5 h-3.5" />
+            <Button size="sm" onClick={() => router.push(`/appointments/new?patient_id=${patient.id}`)} className="text-xs sm:text-sm px-2 sm:px-3">
+              <CalendarPlus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               <span className="hidden sm:inline">New Appt</span>
             </Button>
           </div>
@@ -203,7 +204,7 @@ export default function PatientProfilePage() {
       </Card>
 
       {/* Tab navigation */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-1 flex gap-1">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-1.5 flex gap-1">
         {PROFILE_TABS.map(tab => (
           <button
             key={tab.id}
