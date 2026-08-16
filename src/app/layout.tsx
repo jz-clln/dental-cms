@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from 'next';
-import './globals.css';
+import './global.css';
 import { Toaster } from 'sonner';
 
 export const metadata: Metadata = {
-  title: 'Bitey – Dental CMS',
+  title: 'Bitey',
   description: 'Clinic management system for dental practices',
   manifest: '/manifest.json',
   icons: {
