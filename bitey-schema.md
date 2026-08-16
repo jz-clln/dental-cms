@@ -88,4 +88,4 @@ matching `clinic_status` row right after the `clinics` row is created.
   admin. Self-service profile edits should go through a controlled server
   action instead.
 
-  All privileged server actions must verify the authenticated user's identity and authorization before using the service-role client. RLS is not considered a substitute for authorization checks when the service role is involved.
+  All privileged server actions must verify the authenticated user's identity and authorization before using the service-role client. RLS is not considered a substitute for authorization checks when the service role is involved.   

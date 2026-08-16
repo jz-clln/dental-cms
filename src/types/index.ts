@@ -1,7 +1,4 @@
-// ============================================================
-// DENTAL CMS - TypeScript Types
-// ============================================================
-
+// D:\OneDrive\Desktop\dental-cms\src\types\index.ts
 export interface Clinic {
   id: string;
   name: string;
