@@ -1,4 +1,18 @@
 //src\app\(dashboard)\dashboard\page.tsx
+//
+// UPDATE: restored the "Add Billing" quick action — it had been dropped
+// from the QUICK_ACTIONS array entirely (not a rendering bug, just
+// missing from the list). Routes to /billing?action=new and
+// /inventory?action=new — neither billing/ nor inventory/ have a
+// dedicated "new" subroute the way patients/ and appointments/ do, so
+// the query param opens the existing Add Charge / Add Item modal
+// directly on load instead (see billing/page.tsx, inventory/page.tsx).
+//
+// Grid locked to grid-cols-4 unconditionally (was grid-cols-3, then
+// grid-cols-2 sm:grid-cols-4) so all 4 actions sit in a single row at
+// every screen size and zoom level. min-w-0 + truncate on each card
+// stop the longest label ("New Appointment") from forcing the row
+// wider than its container, which was causing edge gaps on zoom.
 
 'use client';
 
@@ -7,7 +21,7 @@ import { useClinicId } from '@/lib/hooks/useClinicId';
 import { formatPeso } from '@/lib/utils';
 import {
   Calendar, Users, Package, TrendingUp,
-  UserPlus, CalendarPlus, BoxIcon, ArrowRight,
+  UserPlus, CalendarPlus, BoxIcon, ArrowRight, Receipt,
 } from 'lucide-react';
 
 import { useDashboard }           from '@/lib/hooks/useDashboard';
@@ -31,21 +45,22 @@ function QuickActions() {
       <p className="text-[10px] uppercase tracking-widest font-semibold text-gray-400 mb-2">
         Quick actions
       </p>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-2 w-full">
         {[
-          { href: '/patients/new',      label: 'New Patient',      icon: UserPlus,    dot: 'bg-teal-500'    },
-          { href: '/appointments/new',  label: 'New Appointment',  icon: CalendarPlus, dot: 'bg-[#1a3d2b]'  },
-          { href: '/inventory',         label: 'Add Supply',       icon: BoxIcon,     dot: 'bg-amber-500'   },
+          { href: '/patients/new',      label: 'New Patient',      icon: UserPlus,     dot: 'bg-[#386641]'   },
+          { href: '/appointments/new',  label: 'New Appointment',  icon: CalendarPlus, dot: 'bg-[#ee9b00]'  },
+          { href: '/billing?action=new',    label: 'Add Billing',  icon: Receipt,      dot: 'bg-[#386641]' },
+          { href: '/inventory?action=new',  label: 'Add Supply',   icon: BoxIcon,      dot: 'bg-amber-500' },
         ].map(action => (
           <Link
             key={action.href}
             href={action.href}
-            className="flex flex-col items-center gap-1.5 px-2 py-3 sm:py-3.5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all text-center"
+            className="flex flex-col items-center gap-1.5 px-1 sm:px-2 py-3 sm:py-3.5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all text-center min-w-0"
           >
-            <span className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center ${action.dot}`}>
+            <span className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center flex-shrink-0 ${action.dot}`}>
               <action.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
             </span>
-            <span className="text-[10px] sm:text-[11px] font-medium text-gray-600 leading-tight">
+            <span className="text-[9px] sm:text-[11px] font-medium text-gray-600 leading-tight truncate w-full">
               {action.label}
             </span>
           </Link>
