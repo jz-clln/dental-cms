@@ -1,3 +1,5 @@
+// src/app/(dashboard)/settings/page.tsx
+
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -136,7 +138,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-5">
+    // Mobile/tablet: unchanged (max-w-2xl — viewport is already narrower than this, so no visual change).
+    // Desktop (lg+): container widens so the 6-tab bar fits on one line without triggering
+    // the internal horizontal scrollbar, using up the empty space beside it instead.
+    <div className="max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-5">
 
       {/* Tabs */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-1.5 flex gap-1 overflow-x-auto">

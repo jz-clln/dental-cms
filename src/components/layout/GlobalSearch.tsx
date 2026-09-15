@@ -168,7 +168,7 @@ export function GlobalSearch() {
           onChange={handleChange}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder="Search… ( / )"
+          placeholder="Search Bar"
           className="w-32 sm:w-56 pl-9 pr-8 py-2 rounded-lg border border-porcelain-200 text-sm
           bg-porcelain-50 focus:bg-white focus:outline-none focus:animate-focus-glow
             focus:border-transparent hover:border-porcelain-300 transition-colors"
