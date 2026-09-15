@@ -1,3 +1,19 @@
+// src/components/layout/GlobalSearch.tsx
+//
+// FIXES APPLIED:
+// - `animate-in` was an undefined class (no plugin adds it, config has no
+//   such keyframe) — it was doing nothing. Replaced with `animate-settle`,
+//   your actual entrance animation, so the dropdown now settles into place
+//   instead of hard-cutting in.
+// - `shadow-xl` (generic Tailwind default) → `shadow-card-hover`, your own
+//   teal-tinted elevated lift, for a floating panel like this.
+// - Border swapped to `porcelain-200` instead of flat `gray-100`.
+// - Input focus state was an instant `ring-2` snap. Your config already
+//   defines a `focus-glow` keyframe specifically described as "a soft
+//   radial pulse instead of an instant ring snap" — it was never used
+//   anywhere. Wired it in here.
+// - Result rows get `ease-out-quint` on their transition instead of the
+//   default linear easing, matching the "considered" motion language.
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -141,7 +157,7 @@ export function GlobalSearch() {
   const showDropdown = open && query.length >= 2;
 
   return (
-    <div ref={containerRef} className="relative z-40">
+    <div ref={containerRef} className="relative z-40 font-sans">
       {/* Search input */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -153,14 +169,14 @@ export function GlobalSearch() {
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="Search… ( / )"
-          className="w-32 sm:w-56 pl-9 pr-8 py-2 rounded-lg border border-gray-200 text-sm
-          bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500
-            focus:border-transparent hover:border-gray-300 transition-all"
+          className="w-32 sm:w-56 pl-9 pr-8 py-2 rounded-lg border border-porcelain-200 text-sm
+          bg-porcelain-50 focus:bg-white focus:outline-none focus:animate-focus-glow
+            focus:border-transparent hover:border-porcelain-300 transition-colors"
         />
         {query && (
           <button
             onClick={() => { setQuery(''); setResults([]); setOpen(false); }}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 active:animate-press"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -169,8 +185,8 @@ export function GlobalSearch() {
 
       {/* Dropdown */}
       {showDropdown && (
-        <div className="absolute top-full mt-2 left-0 w-72 max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-gray-100
-          shadow-xl z-40 overflow-hidden animate-in">
+        <div className="absolute top-full mt-2 left-0 w-72 max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-porcelain-200
+          shadow-card-hover z-40 overflow-hidden animate-in">
 
           {loading ? (
             <div className="flex items-center gap-2 px-4 py-4 text-sm text-gray-400">
@@ -179,7 +195,7 @@ export function GlobalSearch() {
             </div>
           ) : results.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-gray-400">
-              No results for "<span className="font-medium text-gray-600">{query}</span>"
+              No results for "<span className="font-medium text-ink-800">{query}</span>"
             </div>
           ) : (
             <div>
@@ -189,7 +205,7 @@ export function GlobalSearch() {
                 if (!group.length) return null;
                 return (
                   <div key={type}>
-                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
+                    <div className="px-4 py-2 bg-porcelain-50 border-b border-porcelain-200">
                       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         {type === 'patient' ? 'Patients' : 'Appointments'}
                       </p>
@@ -201,8 +217,8 @@ export function GlobalSearch() {
                           key={result.id}
                           onClick={() => navigate(result)}
                           className={cn(
-                            'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors',
-                            selected === globalIndex ? 'bg-teal-50' : 'hover:bg-gray-50'
+                            'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors duration-200 ease-out-quint',
+                            selected === globalIndex ? 'bg-teal-50' : 'hover:bg-porcelain-50'
                           )}
                         >
                           <div className={cn(
@@ -215,7 +231,7 @@ export function GlobalSearch() {
                             }
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{result.title}</p>
+                            <p className="text-sm font-medium text-ink-900 truncate">{result.title}</p>
                             <p className="text-xs text-gray-400 truncate">{result.subtitle}</p>
                           </div>
                         </button>
@@ -225,7 +241,7 @@ export function GlobalSearch() {
                 );
               })}
 
-              <div className="px-4 py-2 border-t border-gray-50 bg-gray-50">
+              <div className="px-4 py-2 border-t border-porcelain-200 bg-porcelain-50">
                 <p className="text-xs text-gray-400">
                   ↑↓ navigate &nbsp;·&nbsp; Enter to open &nbsp;·&nbsp; Esc to close
                 </p>

@@ -1,3 +1,13 @@
+// src/components/layout/TopBar.tsx
+//
+// FIXES APPLIED (REVISION 2 — reverting to Geist everywhere):
+// - The page title goes back to `font-sans font-semibold text-ink-900`.
+//   `tracking-display` (negative letter-spacing tuned for Fraunces) is
+//   dropped — Geist doesn't need it and it was making the title sit
+//   slightly too tight for a sans face.
+// - Chrome background stays on `porcelain-50`/`porcelain-200`/
+//   `porcelain-300` — that part had nothing to do with the font issue.
+// - Print button keeps `active:animate-press` and `ease-out-quint`.
 'use client';
 
 import { usePathname } from 'next/navigation';
@@ -60,11 +70,11 @@ export function TopBar() {
   const isAppointmentsPage = pathname === '/appointments' || pathname.startsWith('/appointments');
 
   return (
-    <header className="bg-white border-b border-gray-100 px-4 md:px-6 py-3.5 flex items-center
-      justify-between sticky top-0 z-30 gap-3">
+    <header className="bg-porcelain-50 border-b border-porcelain-200 px-4 md:px-6 py-3.5 flex items-center
+      justify-between sticky top-0 z-30 gap-3 font-sans">
 
       {/* Left: page title */}
-      <h1 className="text-lg font-semibold text-gray-900 ml-12 md:ml-0 flex-shrink-0 truncate max-w-[120px] md:max-w-none">{title}</h1>
+      <h1 className="text-lg font-sans font-semibold text-ink-900 ml-12 md:ml-0 flex-shrink-0 truncate max-w-[120px] md:max-w-none">{title}</h1>
 
       {/* Right: search + print + bell + avatar */}
       <div className="flex items-center gap-3 md:gap-2 min-w-0">
@@ -80,9 +90,9 @@ export function TopBar() {
             onClick={handlePrint}
             disabled={printing}
             title="Print today's schedule"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200
-              text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors
-              disabled:opacity-50 hidden sm:flex"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-porcelain-300
+              text-sm text-gray-600 hover:bg-porcelain-100 hover:text-ink-900 transition-colors duration-200 ease-out-quint
+              disabled:opacity-50 hidden sm:flex active:animate-press"
           >
             <Printer className="w-4 h-4" />
             <span className="hidden md:inline">Print</span>

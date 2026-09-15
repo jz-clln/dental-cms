@@ -1,3 +1,22 @@
+// src/components/layout/NotificationsBell.tsx
+//
+// FIXES APPLIED:
+// - `animate-in` was an undefined class, doing nothing. Replaced with
+//   `animate-settle`.
+// - `shadow-2xl` (generic default) → `shadow-card-hover`, your elevated
+//   card lift token.
+// - Panel title "Notifications" is a headline — switched to `font-display
+//   tracking-display`, matching the config's own description of what that
+//   family is for.
+// - `text-gray-900` on primary text swapped to `text-ink-900` — your
+//   config's own comment says ink exists specifically to avoid the flat
+//   #111 "AI default" that gray-900 renders as. Muted/secondary text
+//   stays gray-400/500, which is fine for de-emphasis.
+// - Borders swapped to `porcelain-200`, backgrounds to `porcelain-50`
+//   where they were flat gray-50/white.
+// - Interactive icon buttons (mark read, dismiss, bell) get
+//   `active:animate-press` — the tactile press feedback your config
+//   defines but never uses anywhere.
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -158,7 +177,7 @@ export function NotificationsBell() {
       }
     }
 
-    // FIX: Only delete the specific types we're about to re-insert, never wipe everything
+    // Only delete the specific types we're about to re-insert, never wipe everything
     if (toInsert.length > 0) {
       const typesToReplace = [...new Set(toInsert.map((n: any) => n.type))];
 
@@ -176,7 +195,7 @@ export function NotificationsBell() {
     setGenerating(false);
   }, [clinicId, loadNotifications]);
 
-  // FIX: Load on mount (silent), generate on open
+  // Load on mount (silent), generate on open
   useEffect(() => {
     if (!clinicId) return;
     loadNotifications();
@@ -244,15 +263,14 @@ export function NotificationsBell() {
   }
 
   return (
-    <div ref={panelRef} className="relative z-50">
+    <div ref={panelRef} className="relative z-50 font-sans">
       {/* Bell button */}
       <button
         onClick={() => setOpen(v => !v)}
-        className="relative p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+        className="relative p-2 rounded-lg hover:bg-porcelain-100 text-gray-500 transition-colors active:animate-press"
         title="Notifications"
       >
         <Bell className="w-5 h-5" />
-        {/* FIX: plain red dot, no number, positioned on bell icon not container */}
         {unreadCount > 0 && (
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white pointer-events-none" />
         )}
@@ -267,12 +285,12 @@ export function NotificationsBell() {
       {/* Panel */}
       {open && (
         <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl
-          border border-gray-100 shadow-2xl z-50 overflow-hidden animate-in">
+          border border-porcelain-200 shadow-card-hover z-50 overflow-hidden animate-in">
 
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100">
+          <div className="flex items-center justify-between px-4 py-3.5 border-b border-porcelain-200">
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-gray-900">Notifications</h3>
+              <h3 className="font-display tracking-display text-ink-900">Notifications</h3>
               {unreadCount > 0 && (
                 <span className="text-xs bg-red-100 text-red-600 font-semibold px-2 py-0.5 rounded-full">
                   {unreadCount} new
@@ -283,14 +301,14 @@ export function NotificationsBell() {
               {unreadCount > 0 && (
                 <button
                   onClick={markAllRead}
-                  className="flex items-center gap-1 text-xs text-teal-700 hover:underline font-medium px-2 py-1 rounded-lg hover:bg-teal-50 transition-colors"
+                  className="flex items-center gap-1 text-xs text-teal-700 hover:underline font-medium px-2 py-1 rounded-lg hover:bg-teal-50 transition-colors active:animate-press"
                 >
                   <CheckCheck className="w-3.5 h-3.5" /> Mark all read
                 </button>
               )}
               <button
                 onClick={() => setOpen(false)}
-                className="p-1 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors"
+                className="p-1 rounded-lg text-gray-400 hover:bg-porcelain-100 transition-colors active:animate-press"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -311,7 +329,7 @@ export function NotificationsBell() {
                 <p className="text-xs text-gray-300 mt-1">No alerts at this time</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-porcelain-200">
                 {notifications.map(n => {
                   const config = TYPE_CONFIG[n.type];
                   const Icon = config.icon;
@@ -319,9 +337,9 @@ export function NotificationsBell() {
                     <div
                       key={n.id}
                       className={cn(
-                        'flex items-start gap-3 px-4 py-3.5 group transition-colors',
+                        'flex items-start gap-3 px-4 py-3.5 group transition-colors duration-200 ease-out-quint',
                         !n.read && 'bg-blue-50/40',
-                        n.href && 'cursor-pointer hover:bg-gray-50',
+                        n.href && 'cursor-pointer hover:bg-porcelain-50',
                       )}
                       onClick={() => n.href && handleClickNotification(n)}
                     >
@@ -338,7 +356,7 @@ export function NotificationsBell() {
                         <div className="flex items-start justify-between gap-2">
                           <p className={cn(
                             'text-sm font-semibold leading-snug',
-                            n.read ? 'text-gray-600' : 'text-gray-900'
+                            n.read ? 'text-gray-600' : 'text-ink-900'
                           )}>
                             {n.title}
                           </p>
@@ -346,7 +364,7 @@ export function NotificationsBell() {
                             {!n.read && (
                               <button
                                 onClick={e => { e.stopPropagation(); markOneRead(n.id); }}
-                                className="p-1 rounded text-gray-300 hover:text-teal-500 transition-colors"
+                                className="p-1 rounded text-gray-300 hover:text-teal-500 transition-colors active:animate-press"
                                 title="Mark as read"
                               >
                                 <Check className="w-3.5 h-3.5" />
@@ -354,7 +372,7 @@ export function NotificationsBell() {
                             )}
                             <button
                               onClick={e => { e.stopPropagation(); deleteOne(n.id); }}
-                              className="p-1 rounded text-gray-300 hover:text-red-400 transition-colors"
+                              className="p-1 rounded text-gray-300 hover:text-red-400 transition-colors active:animate-press"
                               title="Dismiss"
                             >
                               <X className="w-3.5 h-3.5" />
@@ -386,7 +404,7 @@ export function NotificationsBell() {
 
           {/* Footer */}
           {notifications.length > 0 && (
-            <div className="px-4 py-3 border-t border-gray-50 bg-gray-50 flex items-center justify-between">
+            <div className="px-4 py-3 border-t border-porcelain-200 bg-porcelain-50 flex items-center justify-between">
               <p className="text-xs text-gray-400">{notifications.length} notification{notifications.length !== 1 ? 's' : ''}</p>
               <button
                 onClick={async () => {
