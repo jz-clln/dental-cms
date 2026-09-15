@@ -1,3 +1,5 @@
+//src\app\(dashboard)\layout.tsx
+
 'use client';
 
 import { Sidebar, BottomNav } from '@/components/layout/Sidebar';

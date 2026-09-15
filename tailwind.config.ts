@@ -1,3 +1,9 @@
+// tailwind.config.ts
+//
+// FONT SWITCH: Figtree → Poppins.
+// - `sans` now points at `--font-poppins` instead of `--font-figtree`.
+// - Everything else (colors, shadows, timing functions, keyframes,
+//   animations) is untouched — this was never a font issue.
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
@@ -9,15 +15,14 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        // Headlines, the mascot's name, anything that should feel human and considered
-        display: ['var(--font-fraunces)', 'ui-serif', 'Georgia', 'serif'],
-        // Body copy, labels, inputs, buttons
-        sans: ['var(--font-geist-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        // Verification codes, appointment refs
+        // The one true type family — headlines, body, labels, buttons,
+        // inputs. Rounded, geometric, no sharp edges anywhere, but
+        // legible enough to hold up at the small uppercase label sizes
+        // used throughout the dashboard.
+        sans: ['var(--font-poppins)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // Verification codes, appointment refs — stays distinct and
+        // technical on purpose.
         mono: ['var(--font-geist-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
-      },
-      letterSpacing: {
-        display: '-0.015em', // Fraunces sits tighter than default tracking at display sizes
       },
       colors: {
         teal: {
