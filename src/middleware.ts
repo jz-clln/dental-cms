@@ -12,11 +12,19 @@
 // very next request — it takes up to STAFF_SESSION_TTL_SECONDS (5 min,
 // in session-cookie.ts) to take effect, since a cookie issued just before
 // deactivation is still trusted until it expires.
+//
+// UPDATE 2: added /privacy, /terms, /cookie-policy to PUBLIC_ROUTES. These
+// legal pages were previously unreachable by logged-out visitors — the
+// matcher below catches almost every path, so anyone not logged in
+// clicking these links was being redirected straight to /login instead of
+// seeing the page. This also fixes the cookie-notice banner's "Learn
+// more" link on the login/signup screens, since those visitors are by
+// definition not authenticated yet.
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { signStaffSession, verifyStaffSession, STAFF_SESSION_COOKIE } from '@/lib/session-cookie';
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/verify', '/onboarding', '/api/auth/callback', '/reset-password', '/forgot-password'];
+const PUBLIC_ROUTES = ['/login', '/signup', '/verify', '/onboarding', '/api/auth/callback', '/reset-password', '/forgot-password', '/privacy', '/terms', '/cookie-policy'];
 
 export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
