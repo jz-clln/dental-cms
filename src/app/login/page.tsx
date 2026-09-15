@@ -1,3 +1,4 @@
+// src/app/login/page.tsx
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
@@ -67,11 +68,14 @@ function LoginContent() {
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
+      // FIX: .single() throws a 406 whenever a brand-new account has no
+      // staff row yet (mid-onboarding) — .maybeSingle() returns null
+      // instead, which is exactly the case this code already handles below.
       const { data: staff } = await supabase
         .from('staff')
         .select('clinic_id')
         .eq('auth_user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!staff?.clinic_id) {
         router.push('/onboarding');
