@@ -1,3 +1,4 @@
+// src/app/onboarding/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -38,47 +39,66 @@ export default function OnboardingPage() {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
+    setErrors({});
 
-    const supabase = createClient();
-    await supabase.auth.refreshSession();
-    const { data: { user } } = await supabase.auth.getUser();
+    // FIX: everything below is now wrapped in try/catch/finally. Previously,
+    // if `res.json()` threw (e.g. because middleware redirected this POST
+    // to /onboarding and the response body was HTML instead of JSON), the
+    // function died mid-execution and `setLoading(false)` was never
+    // reached — the button was stuck on "Creating your clinic..." forever
+    // with no error shown. The `finally` block below guarantees loading
+    // state is always cleared no matter which line throws.
+    try {
+      const supabase = createClient();
+      await supabase.auth.refreshSession();
+      const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) {
-      router.push('/login');
-      return;
-    }
+      if (!user) {
+        router.push('/login');
+        return;
+      }
 
-    const res = await fetch('/api/onboarding', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clinicName: form.clinicName.trim(),
-        address: form.address.trim(),
-        contactNumber: form.contactNumber.trim(),
-        email: form.email.trim(),
-        fullName: user.user_metadata?.full_name ?? user.email ?? 'Admin',
-      }),
-    });
+      const res = await fetch('/api/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clinicName: form.clinicName.trim(),
+          address: form.address.trim(),
+          contactNumber: form.contactNumber.trim(),
+          email: form.email.trim(),
+          fullName: user.user_metadata?.full_name ?? user.email ?? 'Admin',
+        }),
+      });
 
-    const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        // Response wasn't valid JSON — most likely means the request got
+        // redirected somewhere upstream (e.g. middleware) instead of
+        // reaching the API route. Surface it instead of hanging.
+        throw new Error('Unexpected response from server. Please try again.');
+      }
 
-    if (data.alreadyExists) {
-      router.push('/dashboard');
-      return;
-    }
+      if (data.alreadyExists) {
+        router.push('/dashboard');
+        return;
+      }
 
-    if (!res.ok || data.error) {
-      setErrors({ general: data.error ?? 'Something went wrong. Please try again.' });
+      if (!res.ok || data.error) {
+        setErrors({ general: data.error ?? 'Something went wrong. Please try again.' });
+        return;
+      }
+
+      setDone(true);
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1800);
+    } catch (err: any) {
+      setErrors({ general: err?.message ?? 'Something went wrong. Please try again.' });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setDone(true);
-    setLoading(false);
-
-    setTimeout(() => {
-      router.push('/dashboard');
-    }, 1800);
   }
 
   // ── Success state ──────────────────────────────────────────
