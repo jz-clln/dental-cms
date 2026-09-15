@@ -1,3 +1,15 @@
+// src/components/dashboard/BiteyCard.tsx
+//
+// FIXES APPLIED (REVISION 2 — reverting to Geist everywhere):
+// - Bitey's headline line reverts from `font-display font-medium
+//   tracking-display` to `font-sans font-semibold`. Bumped the weight up
+//   from medium to semibold — Fraunces at "medium" carried enough visual
+//   weight on its own to read as a headline; Geist medium next to Geist
+//   regular body text below it was too subtle a jump, so semibold
+//   restores that hierarchy without needing a different typeface.
+// - Stat numbers (Today's appts / No-shows / Low stock) revert from
+//   `font-display` to `font-sans font-bold`, matching the weight used in
+//   StatCard's numbers elsewhere on the dashboard.
 'use client';
 
 import Image from 'next/image';
@@ -18,7 +30,7 @@ export const BiteyCard = memo(function BiteyCard({ bitey, stats, appointments }:
   const total = appointments.length;
 
   return (
-    <div className="relative overflow-hidden rounded-xl bg-[#004730] border border-white/[0.15] font-[Raleway]">
+    <div className="relative overflow-hidden rounded-xl bg-[#004730] border border-white/[0.15] shadow-card animate-settle font-sans">
 
       {/* Circle light effects */}
       <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/[0.05] pointer-events-none" />
@@ -26,11 +38,11 @@ export const BiteyCard = memo(function BiteyCard({ bitey, stats, appointments }:
       <div className="absolute -top-1 -right-1 w-10 h-10 rounded-full bg-white/[0.06] pointer-events-none" />
 
       {/* Top — mascot 30% + message 70% */}
-      <div className="relative flex items-end">
+      <div className="relative flex items-center">
 
         {/* Mascot — always 30% width */}
         <div
-          className="relative flex-shrink-0 self-end"
+          className="relative flex-shrink-0 animate-breathe"
           style={{ width: 'clamp(80px, 30%, 110px)', aspectRatio: '1 / 1.15' }}
         >
           <Image
@@ -58,7 +70,7 @@ export const BiteyCard = memo(function BiteyCard({ bitey, stats, appointments }:
                   key={i}
                   className={
                     i === 0
-                      ? 'text-[11px] md:text-[13px] font-semibold text-white leading-[1.3] tracking-[-0.01em]'
+                      ? 'text-[13px] md:text-[15px] font-sans font-semibold text-white leading-[1.3]'
                       : i === 1
                       ? 'text-[10px] md:text-[11px] font-medium text-white/75 leading-[1.4]'
                       : 'text-[9px] md:text-[10px] text-white/45 leading-relaxed italic'
@@ -84,7 +96,7 @@ export const BiteyCard = memo(function BiteyCard({ bitey, stats, appointments }:
             { label: 'Low stock',     value: stats.lowStockAlerts, warn: hasLowStock },
           ].map(item => (
             <div key={item.label} className="py-2.5 px-2 text-center">
-              <p className={`font-serif text-[18px] leading-none mb-[3px] ${item.warn ? 'text-red-300' : 'text-white'}`}>
+              <p className={`font-sans font-bold text-[19px] leading-none mb-[3px] ${item.warn ? 'text-red-300' : 'text-white'}`}>
                 {item.value}
               </p>
               <p className="text-[9px] font-medium text-white/45 uppercase tracking-[0.08em]">
@@ -97,7 +109,7 @@ export const BiteyCard = memo(function BiteyCard({ bitey, stats, appointments }:
         <div className="relative px-4 py-2.5 flex items-center gap-2 bg-black/[0.12]">
           <span className="w-[4px] h-[4px] rounded-full bg-white/70 flex-shrink-0 animate-pulse" />
           <p className="text-[10px] text-white/45">
-            Use the quick actions above to get started with your clinic.
+            Use the quick actions below to get started with your clinic.
           </p>
         </div>
       )}
