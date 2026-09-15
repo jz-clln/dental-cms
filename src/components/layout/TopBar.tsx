@@ -15,6 +15,24 @@
 // Tailwind couldn't resolve which display value should win. The
 // intended responsive behavior (hidden below `sm`, flex at `sm+`) is
 // fully expressed by `hidden sm:flex` alone.
+//
+// FIX (REVISION 4): the title's `ml-12` on mobile existed only to leave
+// room for Sidebar's old fixed hamburger button, which sat on top of the
+// header at `left-4`. That hamburger was removed when the mobile drawer
+// was dropped in favor of the bottom nav, so the offset was just dead
+// space pushing the title away from the left edge. Removed `ml-12
+// md:ml-0` entirely — the title now sits flush left on every width.
+// Also dropped the fixed-width wrapper that used to sit around
+// `<GlobalSearch />` (`w-[130px] sm:w-auto`): GlobalSearch now sizes
+// itself (icon-only on mobile until tapped, fixed width at sm+), so an
+// outer width constraint here would only fight with that.
+//
+// FIX (REVISION 5): title was still capped at `max-w-[120px]` on mobile
+// (e.g. "Appointments" → "Appointme…"), left over from when the search
+// bar was a fixed 130px next to it. Now that the collapsed search is just
+// an icon, that room exists again — swapped `flex-shrink-0 max-w-[120px]`
+// for `flex-1 min-w-0`, so the title fills whatever space the icons
+// don't need instead of a hardcoded cap.
 'use client';
 
 import { usePathname } from 'next/navigation';
@@ -80,16 +98,18 @@ export function TopBar() {
     <header className="bg-porcelain-50 border-b border-porcelain-200 px-4 md:px-6 py-3.5 flex items-center
       justify-between sticky top-0 z-30 gap-3 font-sans">
 
-      {/* Left: page title */}
-      <h1 className="text-lg font-sans font-semibold text-ink-900 ml-12 md:ml-0 flex-shrink-0 truncate max-w-[120px] md:max-w-none">{title}</h1>
+      {/* Left: page title — sits flush left now that the old floating hamburger is gone.
+          flex-1 + min-w-0 lets it claim whatever room the (now icon-sized, not 130px)
+          search and bell leave it, instead of the old fixed 120px cap that was cutting
+          "Appointments" off on mobile. `truncate` stays on only as a safety net for an
+          unrealistically long title — none of the current ones come close to needing it. */}
+      <h1 className="text-lg font-sans font-semibold text-ink-900 flex-1 min-w-0 truncate">{title}</h1>
 
       {/* Right: search + print + bell + avatar */}
       <div className="flex items-center gap-3 md:gap-2 min-w-0">
 
-        {/* Global search */}
-        <div className="w-[130px] sm:w-auto flex-shrink min-w-0">
-          <GlobalSearch />
-        </div>
+        {/* Global search — icon-only on mobile until tapped, sizes itself */}
+        <GlobalSearch />
 
         {/* Print schedule — only on appointments page */}
         {isAppointmentsPage && (
