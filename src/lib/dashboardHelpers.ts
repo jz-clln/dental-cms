@@ -1,7 +1,4 @@
-/**
- * Pure helpers: date utilities, Bitey derivation, cache, and detection logic.
- * No React, no Supabase — fully testable in isolation.
- */
+//src\lib\dashboardHelpers.ts
 
 import type {
   Stats, BiteyEmotion, BiteyState, ActivityItem,

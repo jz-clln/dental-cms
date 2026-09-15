@@ -1,11 +1,4 @@
-
-/**
- * All Supabase data-fetching for the dashboard.
- * Each function accepts an AbortSignal so callers can cancel in-flight requests.
- *
- * FIX: Supabase JS v2's `.abortSignal(signal)` method threads an AbortSignal
- * through every query in the chain, so unmounted components never write state.
- */
+//src\lib\dashboardFetchers.ts
 
 import { createClient } from '@/lib/supabase/client';
 import type {
