@@ -1,4 +1,4 @@
-// All shared types in one place — eliminates `as any` casts everywhere else.
+//src\types\dashboard.ts
 
 import type { Appointment, ActivityItem, PatientJoin, DentistJoin } from '@/types';
 export type { Appointment, ActivityItem, PatientJoin, DentistJoin };
