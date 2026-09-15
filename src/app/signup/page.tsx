@@ -227,7 +227,7 @@ export default function SignupPage() {
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-4">
-          Dental CMS · For clinic use only
+          Dental CMS · For Clinic Use Only
         </p>
       </div>
     </div>
