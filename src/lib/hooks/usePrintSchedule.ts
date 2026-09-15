@@ -1,3 +1,4 @@
+// src/lib/hooks/usePrintSchedule.ts
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
@@ -9,37 +10,54 @@ export function usePrintSchedule() {
     const supabase = createClient();
     const targetDate = date ?? new Date().toISOString().split('T')[0];
 
-    // Fetch today's appointments with patient and dentist info
-    const { data, error } = await supabase
-      .from('appointments')
-      .select('*, patient:patients(*), dentist:dentists(id, first_name, last_name)')
-      .eq('appointment_date', targetDate)
-      .order('appointment_time', { ascending: true });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert('You must be logged in to print a schedule.');
+      return;
+    }
+
+    // FIX: resolve clinic_id up front and filter appointments by it
+    // explicitly below. RLS already scopes this correctly on its own, but
+    // this query previously had no client-side clinic filter at all — if
+    // RLS were ever misconfigured or briefly disabled on this table,
+    // there was nothing here to catch it before printing every clinic's
+    // appointments for the date.
+    const { data: staffData } = await supabase
+      .from('staff')
+      .select('clinic_id')
+      .eq('auth_user_id', user.id)
+      .maybeSingle();
+
+    if (!staffData?.clinic_id) {
+      alert('No clinic found for this account.');
+      return;
+    }
+
+    const clinicId = staffData.clinic_id;
+
+    // FIX: patient:patients(*) pulled every patient field — birthday,
+    // address, email, consent flags — onto a printed paper schedule that
+    // only ever displays name and contact number. Narrowed to match.
+    const [{ data, error }, { data: clinicData }] = await Promise.all([
+      supabase
+        .from('appointments')
+        .select('*, patient:patients(first_name, last_name, contact_number), dentist:dentists(id, first_name, last_name)')
+        .eq('clinic_id', clinicId)
+        .eq('appointment_date', targetDate)
+        .order('appointment_time', { ascending: true }),
+      supabase
+        .from('clinics')
+        .select('name')
+        .eq('id', clinicId)
+        .maybeSingle(),
+    ]);
 
     if (error || !data) {
       alert('Failed to load schedule. Please try again.');
       return;
     }
 
-    // Get clinic info
-    const { data: { user } } = await supabase.auth.getUser();
-    let clinicName = 'Dental Clinic';
-    if (user) {
-      const { data: staffData } = await supabase
-        .from('staff')
-        .select('clinic_id')
-        .eq('auth_user_id', user.id)
-        .single();
-      if (staffData) {
-        const { data: clinicData } = await supabase
-          .from('clinics')
-          .select('name')
-          .eq('id', staffData.clinic_id)
-          .single();
-        if (clinicData) clinicName = clinicData.name;
-      }
-    }
-
+    const clinicName = clinicData?.name ?? 'Dental Clinic';
     const appointments = data as Appointment[];
     const dateLabel = formatDate(targetDate);
     const printedAt = new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
