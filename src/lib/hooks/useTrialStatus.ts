@@ -1,3 +1,4 @@
+// src/lib/hooks/useTrialStatus.ts
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -38,20 +39,27 @@ export function useTrialStatus(): TrialStatus {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { setStatus(s => ({ ...s, loading: false })); return; }
 
+        // FIX: .maybeSingle() instead of .single() — a deactivated staff
+        // account (or one mid-onboarding) legitimately has zero visible
+        // rows under RLS, and .single() throws on that instead of just
+        // returning null.
         const { data: staff } = await supabase
           .from('staff')
           .select('clinic_id')
           .eq('auth_user_id', user.id)
-          .single();
+          .maybeSingle();
 
         if (!staff?.clinic_id) { setStatus(s => ({ ...s, loading: false })); return; }
 
-        const [clinicRes, countRes] = await Promise.all([
+        // FIX: trial_started_at / trial_ends_at / subscription state live
+        // on clinic_status now, not clinics — clinics.trial_ends_at no
+        // longer exists, which is why this query used to fail outright.
+        const [statusRes, countRes] = await Promise.all([
           supabase
-            .from('clinics')
-            .select('trial_started_at, trial_ends_at, plan')
-            .eq('id', staff.clinic_id)
-            .single(),
+            .from('clinic_status')
+            .select('trial_started_at, trial_ends_at, subscription_status')
+            .eq('clinic_id', staff.clinic_id)
+            .maybeSingle(),
           supabase
             .from('patients')
             .select('id', { count: 'exact', head: true })
@@ -59,19 +67,24 @@ export function useTrialStatus(): TrialStatus {
             .eq('archived', false),
         ]);
 
-        const clinic = clinicRes.data;
+        const clinicStatus = statusRes.data;
         const patientCount = countRes.count ?? 0;
-        const plan = (clinic as any)?.plan ?? 'trial';
 
-        if (plan === 'paid' || plan === 'pro') {
+        // FIX: subscription_status is the authoritative state field on
+        // clinic_status (trial/active/expired/cancelled) — use it
+        // directly instead of inferring "paid" from a free-text plan
+        // string on clinics.
+        if (clinicStatus?.subscription_status === 'active') {
           setStatus({ state: 'paid', daysLeft: 0, daysTotal: TRIAL_DAYS,
             patientLimit: Infinity, canAddPatient: true, patientCount, loading: false });
           return;
         }
 
         const now = new Date();
-        const trialEndsAt = clinic?.trial_ends_at ? new Date(clinic.trial_ends_at) : null;
-        const isTrialing = trialEndsAt ? now < trialEndsAt : true;
+        const trialEndsAt = clinicStatus?.trial_ends_at ? new Date(clinicStatus.trial_ends_at) : null;
+        const isTrialing =
+          clinicStatus?.subscription_status === 'trial' &&
+          (trialEndsAt ? now < trialEndsAt : true);
 
         let daysLeft = 0;
         if (trialEndsAt && isTrialing) {
