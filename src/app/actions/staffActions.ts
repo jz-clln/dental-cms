@@ -31,8 +31,11 @@ export async function createStaffMember(input: CreateStaffInput) {
   const authId = authData.user.id;
 
   // 2. Insert into staff table with the linked auth UUID
+  //    FIX: auth_user_id must be set explicitly — useClinicId() queries
+  //    staff by auth_user_id, and it was never being populated before.
   const { error: dbError } = await supabaseAdmin.from('staff').insert({
     id: authId,
+    auth_user_id: authId,
     clinic_id: input.clinic_id,
     email: input.email,
     full_name: input.full_name,
