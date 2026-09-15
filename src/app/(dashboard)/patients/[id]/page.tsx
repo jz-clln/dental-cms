@@ -1,3 +1,5 @@
+//src\app\(dashboard)\patients\[id]\page.tsx
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -133,7 +135,7 @@ export default function PatientProfilePage() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto space-y-4">
+      <div className="w-full space-y-4">
         <div className="h-8 w-32 bg-gray-100 animate-pulse rounded-lg" />
         <SkeletonCard />
         <SkeletonCard />
@@ -147,7 +149,7 @@ export default function PatientProfilePage() {
   const age = calculateAge(patient.birthday);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
+    <div className="w-full space-y-5">
 
       {/* Back */}
       <Button variant="ghost" size="sm" onClick={() => router.push('/patients')} className="text-gray-500">
