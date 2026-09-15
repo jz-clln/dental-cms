@@ -1,3 +1,4 @@
+// src/lib/hooks/useDashboard.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/lib/hooks/useToast';
@@ -35,7 +36,7 @@ export interface UseDashboardResult {
   loading: boolean;
   refreshing: boolean;
   refresh: () => Promise<void>;
-  initialLoaded: boolean; // FIX: tracks first load only — prevents skeleton blinking on silent refreshes
+  initialLoaded: boolean;
 }
 
 export function useDashboard(clinicId: string | null): UseDashboardResult {
@@ -44,11 +45,23 @@ export function useDashboard(clinicId: string | null): UseDashboardResult {
   const [bitey, setBitey] = useState<BiteyState>(INITIAL_BITEY);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(false);
 
   const loadingRef    = useRef(false);
   const lastFocusLoad = useRef(0);
   const abortRef      = useRef<AbortController | null>(null);
-  const initialLoaded = useRef(false); // FIX: never resets after first successful load
+
+  // FIX: `toast` from useToast() is now memoized at its source (see
+  // useToast.ts), which already fixes the blinking-skeleton loop. This
+  // ref is a second, independent safeguard: by reading toast through a
+  // ref instead of putting it directly in loadDashboard's dependency
+  // array, an identity change in `toast` — from this hook or any future
+  // one — can never again cause loadDashboard to be recreated, and
+  // therefore can never retrigger the `useEffect([clinicId,
+  // loadDashboard])` below. Only an actual clinicId change should ever
+  // restart the fetch.
+  const toastRef = useRef(toast);
+  useEffect(() => { toastRef.current = toast; }, [toast]);
 
   const applyData = useCallback((next: DashboardState) => {
     setData(next);
@@ -69,26 +82,28 @@ export function useDashboard(clinicId: string | null): UseDashboardResult {
     abortRef.current = controller;
 
     loadingRef.current = true;
-    // FIX: only show loading spinner on initial load, not silent refreshes
-    if (!silent && !initialLoaded.current) setLoading(true);
+    if (!silent) setLoading(true);
 
     try {
       const next = await fetchAll(clinicId, controller.signal);
       if (controller.signal.aborted) return;
       setCacheEntry(clinicId, next);
       applyData(next);
-      initialLoaded.current = true; // FIX: mark initial load done — never triggers skeleton again
+      setInitialLoaded(true);
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       console.error('Dashboard load error:', err);
-      if (!silent) toast.error('Failed to load dashboard data');
+      if (!silent) toastRef.current.error('Failed to load dashboard data');
+      // Even on failure, stop showing the skeleton forever — surface
+      // whatever we have (defaults or last good cache) instead.
+      setInitialLoaded(true);
     } finally {
       if (!controller.signal.aborted) {
         loadingRef.current = false;
         setLoading(false);
       }
     }
-  }, [clinicId, applyData, toast]);
+  }, [clinicId, applyData]);
 
   const refresh = useCallback(async () => {
     if (refreshing) return;
@@ -124,7 +139,10 @@ export function useDashboard(clinicId: string | null): UseDashboardResult {
   }, [loadDashboard]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 5000);
+    const timer = setTimeout(() => {
+      setLoading(false);
+      setInitialLoaded(true); // safety net — don't skeleton-lock forever
+    }, 5000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -152,5 +170,5 @@ export function useDashboard(clinicId: string | null): UseDashboardResult {
     };
   }, [clinicId, loadDashboard]);
 
-  return { data, bitey, loading, refreshing, refresh, initialLoaded: initialLoaded.current };
+  return { data, bitey, loading, refreshing, refresh, initialLoaded };
 }
