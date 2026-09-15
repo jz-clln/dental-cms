@@ -1,22 +1,21 @@
 // src/components/layout/Sidebar.tsx
 //
-// FIXES APPLIED (REVISION 2 — reverting to Geist everywhere):
-// - Per updated direction: no serif anywhere in the app. The clinic name
-//   was switched to `font-display` in the previous pass — reverted back
-//   to `font-sans`, with `font-semibold` added (instead of relying on
-//   tracking-display, which was tuned specifically for Fraunces' tighter
-//   serif metrics and has no purpose on a sans font) so the brand name
-//   still reads with clear visual weight against the subtitle beneath it.
-// - Applied to both the desktop header and mobile drawer.
-// - `bg-[#0F766E]` was a magic hex value that happens to equal exactly
-//   your `teal-700` token — but written as an arbitrary value, it won't
-//   track if that token ever changes. Replaced with `bg-teal-700`.
-// - `text-gray-900` → `text-ink-900` on primary brand text, per your
-//   config's own stated reason for the ink palette existing.
-// - Borders/hover states swapped from flat `gray-*` to your warm
-//   `porcelain-*` scale for consistency with the rest of the chrome.
-// - Nav link transitions get `ease-out-quint` instead of default linear
-//   easing.
+// FIXES APPLIED (REVISION 3 — mobile nav simplified):
+// - Removed the mobile hamburger button and slide-out drawer. It duplicated
+//   the bottom nav, and Settings/Log Out now live in reachable places
+//   without it (see below).
+// - `BottomNav` now renders ALL nav items (was NAV_ITEMS.slice(0, 5), which
+//   dropped Reports and Settings — those only lived in the removed drawer).
+//   Icon/text sizes and padding were tightened so 7 items fit one row on a
+//   phone width without wrapping or scrolling.
+// - Log Out is no longer reachable from a mobile drawer. It now lives
+//   inside the Settings page (mobile-only entry there) — see
+//   src/app/(dashboard)/settings/page.tsx.
+// - `mobileOpen` state and the `Menu`/`X` icon imports were removed since
+//   nothing uses them anymore.
+//
+// (Carried over from REVISION 2: font-sans + font-semibold brand name,
+// bg-teal-700, text-ink-900, porcelain-* borders, ease-out-quint transitions.)
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -24,7 +23,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Calendar, Package, Receipt,
-  BarChart3, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X,
+  BarChart3, Settings, LogOut, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -43,7 +42,6 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [clinicName, setClinicName] = useState('Dental CMS');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const pathname = usePathname();
@@ -78,7 +76,6 @@ export function Sidebar() {
     return (
       <Link
         href={item.href}
-        onClick={() => setMobileOpen(false)}
         className={cn(
           'flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium transition-all duration-200 ease-out-quint',
           active
@@ -149,73 +146,33 @@ export function Sidebar() {
         </button>
       </aside>
 
-      {/* MOBILE: Hamburger */}
-      <button
-        className="md:hidden fixed top-3.5 left-4 z-50 p-2 rounded-lg bg-white shadow-card border border-porcelain-200 active:animate-press font-sans"
-        onClick={() => setMobileOpen(true)}
-      >
-        <Menu className="w-5 h-5 text-gray-700" />
-      </button>
-
-      {/* MOBILE: Drawer */}
-      {mobileOpen && (
-        <>
-          <div className="md:hidden fixed inset-0 bg-black/40 z-40" onClick={() => setMobileOpen(false)} />
-          <div className="md:hidden fixed left-0 top-0 h-full w-64 bg-white z-50 shadow-card-hover flex flex-col animate-in font-sans">
-            <div className="flex items-center justify-between px-4 py-5 border-b border-porcelain-200">
-              <div className="flex items-center gap-3">
-                <AppIcon size="sm" clinicName={clinicName} />
-                <div>
-                  <p className="text-sm font-sans font-semibold text-ink-900 truncate max-w-[140px]">{clinicName}</p>
-                  <p className="text-xs text-gray-400">Clinic Management</p>
-                </div>
-              </div>
-              <button onClick={() => setMobileOpen(false)} className="active:animate-press">
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-            <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-              {NAV_ITEMS.map(item => <NavLink key={item.href} item={item} />)}
-            </nav>
-
-            {/* Trial countdown in mobile drawer */}
-            <TrialCountdown />
-
-            <div className="p-3 border-t border-porcelain-200">
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium
-                  text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors w-full"
-              >
-                <LogOut className="w-[18px] h-[18px]" /> Log Out
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+      {/* Mobile hamburger + drawer intentionally removed (Revision 3) —
+          phone navigation is handled entirely by <BottomNav /> below. */}
     </>
   );
 }
 
 export function BottomNav() {
   const pathname = usePathname();
-  const BOTTOM_ITEMS = NAV_ITEMS.slice(0, 5);
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-porcelain-200 z-30 flex font-sans">
-      {BOTTOM_ITEMS.map(item => {
+    <nav
+      className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-porcelain-200 z-30 flex font-sans"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      {NAV_ITEMS.map(item => {
         const active = pathname === item.href || pathname.startsWith(item.href + '/');
         return (
           <Link
             key={item.href}
             href={item.href}
             className={cn(
-              'flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors duration-200 ease-out-quint',
+              'flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-[10px] font-medium transition-colors duration-200 ease-out-quint',
               active ? 'text-teal-700' : 'text-gray-400'
             )}
           >
-            <item.icon className={cn('w-5 h-5', active && 'text-teal-700')} />
-            <span>{item.label}</span>
+            <item.icon className={cn('w-5 h-5 flex-shrink-0', active && 'text-teal-700')} />
+            <span className="truncate max-w-full leading-none">{item.label}</span>
           </Link>
         );
       })}
