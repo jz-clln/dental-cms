@@ -8,6 +8,13 @@
 // - Chrome background stays on `porcelain-50`/`porcelain-200`/
 //   `porcelain-300` — that part had nothing to do with the font issue.
 // - Print button keeps `active:animate-press` and `ease-out-quint`.
+//
+// FIX (REVISION 3): removed the redundant unprefixed `flex` from the
+// print button's className. It conflicted with the unprefixed `hidden`
+// on the same element — both applied at the base breakpoint, so
+// Tailwind couldn't resolve which display value should win. The
+// intended responsive behavior (hidden below `sm`, flex at `sm+`) is
+// fully expressed by `hidden sm:flex` alone.
 'use client';
 
 import { usePathname } from 'next/navigation';
@@ -90,7 +97,7 @@ export function TopBar() {
             onClick={handlePrint}
             disabled={printing}
             title="Print today's schedule"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-porcelain-300
+            className="items-center gap-1.5 px-3 py-2 rounded-lg border border-porcelain-300
               text-sm text-gray-600 hover:bg-porcelain-100 hover:text-ink-900 transition-colors duration-200 ease-out-quint
               disabled:opacity-50 hidden sm:flex active:animate-press"
           >
