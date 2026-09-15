@@ -1,6 +1,9 @@
+//src\app\(dashboard)\inventory\page.tsx
+
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { InventoryItem } from '@/types';
 import { InventoryTable } from '@/components/inventory/InventoryTable';
@@ -10,6 +13,8 @@ import { useAppToast } from '@/app/(dashboard)/layout';
 
 export default function InventoryPage() {
   const toast = useAppToast();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +48,15 @@ export default function InventoryPage() {
   }, [clinicId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Open Add Item modal when the dashboard's quick action links here
+  // with ?action=new, then strip the param so a refresh doesn't reopen it.
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      setShowAddModal(true);
+      router.replace('/inventory');
+    }
+  }, [searchParams, router]);
 
   function handleSuccess() {
     setShowAddModal(false);
