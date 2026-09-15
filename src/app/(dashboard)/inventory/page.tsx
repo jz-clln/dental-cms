@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { InventoryItem } from '@/types';
@@ -11,10 +11,26 @@ import { AddItemForm, RestockForm } from '@/components/inventory/InventoryForm';
 import { Modal } from '@/components/ui/Modal';
 import { useAppToast } from '@/app/(dashboard)/layout';
 
-export default function InventoryPage() {
-  const toast = useAppToast();
+// Reads ?action=new and opens the Add Item modal. Isolated in its own
+// component because useSearchParams() requires a Suspense boundary at
+// the point it's called, or Next.js bails out of static prerendering
+// for the whole page during build.
+function OpenAddModalOnQuery({ onTrigger }: { onTrigger: () => void }) {
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      onTrigger();
+      router.replace('/inventory');
+    }
+  }, [searchParams, router, onTrigger]);
+
+  return null;
+}
+
+function InventoryPageContent() {
+  const toast = useAppToast();
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,15 +65,6 @@ export default function InventoryPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Open Add Item modal when the dashboard's quick action links here
-  // with ?action=new, then strip the param so a refresh doesn't reopen it.
-  useEffect(() => {
-    if (searchParams.get('action') === 'new') {
-      setShowAddModal(true);
-      router.replace('/inventory');
-    }
-  }, [searchParams, router]);
-
   function handleSuccess() {
     setShowAddModal(false);
     setEditTarget(null);
@@ -67,6 +74,10 @@ export default function InventoryPage() {
 
   return (
     <>
+      <Suspense fallback={null}>
+        <OpenAddModalOnQuery onTrigger={() => setShowAddModal(true)} />
+      </Suspense>
+
       <InventoryTable
         items={items}
         loading={loading}
@@ -130,4 +141,8 @@ export default function InventoryPage() {
       </Modal>
     </>
   );
+}
+
+export default function InventoryPage() {
+  return <InventoryPageContent />;
 }

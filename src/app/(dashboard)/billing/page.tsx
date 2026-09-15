@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Patient, Billing, Payment, PatientBillingSummary } from '@/types';
@@ -15,10 +15,26 @@ import { useAppToast } from '@/app/(dashboard)/layout';
 import { formatPeso, getBillingStatus, getTodayString } from '@/lib/utils';
 import { TrendingUp, Receipt, AlertCircle, CheckCircle } from 'lucide-react';
 
-export default function BillingPage() {
-  const toast = useAppToast();
+// Reads ?action=new and opens the Add Charge modal. Isolated in its own
+// component because useSearchParams() requires a Suspense boundary at
+// the point it's called, or Next.js bails out of static prerendering
+// for the whole page during build.
+function OpenChargeModalOnQuery({ onTrigger }: { onTrigger: () => void }) {
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      onTrigger();
+      router.replace('/billing');
+    }
+  }, [searchParams, router, onTrigger]);
+
+  return null;
+}
+
+function BillingPageContent() {
+  const toast = useAppToast();
 
   const [summaries, setSummaries] = useState<PatientBillingSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,15 +109,6 @@ export default function BillingPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Open Add Charge modal when the dashboard's quick action links here
-  // with ?action=new, then strip the param so a refresh doesn't reopen it.
-  useEffect(() => {
-    if (searchParams.get('action') === 'new') {
-      setShowChargeModal(true);
-      router.replace('/billing');
-    }
-  }, [searchParams, router]);
-
   function openCharge(patientId?: string) {
     setPrefillPatientId(patientId);
     setShowChargeModal(true);
@@ -130,6 +137,10 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-5">
+
+      <Suspense fallback={null}>
+        <OpenChargeModalOnQuery onTrigger={() => setShowChargeModal(true)} />
+      </Suspense>
 
       {/* Top stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -241,4 +252,8 @@ export default function BillingPage() {
       </Modal>
     </div>
   );
+}
+
+export default function BillingPage() {
+  return <BillingPageContent />;
 }
