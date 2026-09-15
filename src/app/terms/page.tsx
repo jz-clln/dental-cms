@@ -29,8 +29,8 @@ export default function TermsPage() {
       <Section icon={UserCheck} title="Acceptance of Terms & Eligibility">
         <p>
           By creating a clinic account, you confirm that you are authorized to act on
-          behalf of the clinic and that the information you provide — including DTI/SEC
-          registration, PRC license, and BIR registration — is accurate and current.
+          behalf of the clinic and that the information you provide and including DTI/SEC
+          registration, PRC license, and BIR registration, is accurate and current.
         </p>
         <BulletList items={[
           'Bitey verifies clinic identity before activating full access',
