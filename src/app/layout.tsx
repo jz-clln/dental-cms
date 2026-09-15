@@ -1,19 +1,15 @@
 // src/app/layout.tsx
 //
-// FONT SWITCH: Figtree → Poppins.
-// - Poppins isn't a variable font on Google Fonts, so (unlike Figtree)
-//   it needs an explicit `weight` array. Included 400/500/600/700 to
-//   cover every Tailwind weight class actually used across your
-//   components (font-medium, font-semibold, font-bold) — without this,
-//   next/font silently substitutes the nearest weight it has, which is
-//   how you end up with "every semibold looks identical to bold" bugs.
-// - GeistMono kept untouched — still reserved for verification codes /
-//   appointment refs, deliberately distinct from the body font.
+// UPDATE: added <CookieBanner /> — renders once, at the root, so it
+// covers every route (public pages and the dashboard) rather than being
+// duplicated per layout. See src/components/legal/CookieBanner.tsx for
+// why this is a notice, not a full consent manager.
 import type { Metadata, Viewport } from 'next';
 import { Poppins } from 'next/font/google';
 import { GeistMono } from 'geist/font/mono';
 import './global.css';
 import { Toaster } from 'sonner';
+import { CookieBanner } from '@/components/legal/CookieBanner';
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -46,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans">
         {children}
         <Toaster position="top-right" richColors />
+        <CookieBanner />
       </body>
     </html>
   );
