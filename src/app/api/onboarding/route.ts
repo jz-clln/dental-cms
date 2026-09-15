@@ -1,10 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
+// src/app/api/onboarding/route.ts
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,57 +30,40 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { clinicName, address, contactNumber, email, fullName } = body;
 
-  const adminClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  if (!clinicName || !clinicName.trim()) {
+    return NextResponse.json({ error: 'Clinic name is required' }, { status: 400 });
+  }
+
+  // FIX: this used to insert trial_started_at/trial_ends_at directly into
+  // `clinics`, which no longer has those columns — they live on
+  // clinic_status now. That was the actual cause of the 500.
+  //
+  // FIX: this also used to be three separate inserts (clinic, then staff,
+  // with no clinic_status write at all) via the service_role client, with
+  // no rollback if a later step failed. Delegating to a SECURITY DEFINER
+  // RPC makes clinic + clinic_status + staff creation atomic — all three
+  // succeed together or none of them stick — which is exactly what
+  // prevents the "orphaned clinic, no staff row" state you hit. It also
+  // means this route no longer needs the service_role key at all: the
+  // RPC runs with the calling user's session and elevates its own
+  // privileges internally, tightly scoped to just this operation.
+  const { data: clinicId, error: rpcError } = await supabase.rpc(
+    'create_clinic_for_new_user',
+    {
+      p_name: clinicName,
+      p_address: address || null,
+      p_contact_number: contactNumber || null,
+      p_email: email || user.email || null,
+      p_full_name: fullName || null,
+    }
   );
 
-  // Check if staff already exists
-  const { data: existingStaff } = await adminClient
-    .from('staff')
-    .select('id, clinic_id')
-    .eq('auth_user_id', user.id)
-    .maybeSingle();
-
-  if (existingStaff?.clinic_id) {
-    return NextResponse.json({ alreadyExists: true });
+  if (rpcError) {
+    if (rpcError.message.includes('already linked')) {
+      return NextResponse.json({ alreadyExists: true });
+    }
+    return NextResponse.json({ error: rpcError.message }, { status: 500 });
   }
 
-  // Set trial timestamps
-  const trialStartedAt = new Date();
-  const trialEndsAt = new Date(trialStartedAt);
-  trialEndsAt.setDate(trialEndsAt.getDate() + 30);
-
-  // Create clinic with trial dates
-  const { data: clinic, error: clinicError } = await adminClient
-    .from('clinics')
-    .insert({
-      name: clinicName,
-      address: address || null,
-      contact_number: contactNumber || null,
-      email: email || user.email || null,
-      trial_started_at: trialStartedAt.toISOString(),
-      trial_ends_at: trialEndsAt.toISOString(),
-    })
-    .select()
-    .single();
-
-  if (clinicError || !clinic) {
-    return NextResponse.json({ error: clinicError?.message ?? 'Failed to create clinic' }, { status: 500 });
-  }
-
-  // Create staff record
-  const { error: staffError } = await adminClient.from('staff').insert({
-    clinic_id: clinic.id,
-    auth_user_id: user.id,
-    email: user.email ?? '',
-    full_name: fullName ?? user.email ?? 'Admin',
-    role: 'admin',
-  });
-
-  if (staffError) {
-    return NextResponse.json({ error: staffError.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, clinicId });
 }
