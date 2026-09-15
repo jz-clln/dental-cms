@@ -1,3 +1,4 @@
+/* src/app/global.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -12,7 +13,16 @@
   }
 
   body {
-    @apply text-ink-700 bg-porcelain-50;
+    /* FIX: this had no font-family at all. Every element that didn't
+       explicitly declare its own font class was silently falling back to
+       the browser's default UA font — not Geist Sans, nothing from the
+       Tailwind config. That's the actual root cause of the inconsistent
+       fonts across the app: it was never one broken component, it was
+       the body never setting a baseline in the first place. `font-sans`
+       here resolves to `var(--font-geist-sans)` with the fallback stack
+       from tailwind.config.ts, so the whole app now has one true default
+       instead of relying on every single component to opt in correctly. */
+    @apply font-sans text-ink-700 bg-porcelain-50;
   }
 }
 
