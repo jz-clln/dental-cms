@@ -1,8 +1,22 @@
 // src/app/(dashboard)/settings/page.tsx
+//
+// REVISION: added a mobile-only Log Out entry. The mobile hamburger/drawer
+// in Sidebar.tsx (which used to hold Log Out) was removed in favor of a
+// full bottom nav, so this page is now where phone users sign out. Desktop
+// is untouched — it still has Log Out in the sidebar, so this button is
+// hidden at md: and up.
+//
+// REVISION 2: the "Privacy" tab card now also links to /cookie-policy,
+// alongside the existing /privacy link. Added here rather than as a new
+// tab — a 7th tab would risk breaking the one-line tab bar this page was
+// specifically tuned for (see the max-w-* comment below). Terms isn't
+// linked from this card either; only the Cookie Policy link was added,
+// per what was actually asked for.
 
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Clinic, Staff, Dentist } from '@/types';
 import { Card, CardHeader, CardBody } from '@/components/ui/Card';
@@ -17,7 +31,7 @@ import { ReplayTutorialButton } from '@/components/tutorial/ReplayTutorialButton
 import { useAppToast } from '@/app/(dashboard)/layout';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useVerification } from '@/lib/hooks/useVerification';
-import { Building2, Users, Stethoscope, Lock, ShieldCheck, FileText } from 'lucide-react';
+import { Building2, Users, Stethoscope, Lock, ShieldCheck, FileText, LogOut, Cookie } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ------------------------------------------------------------
@@ -67,6 +81,7 @@ function VerifyTabLabel({
 
 export default function SettingsPage() {
   const toast = useAppToast();
+  const router = useRouter();
 
   const [activeTab, setActiveTab]     = useState<Tab>('clinic');
   const [loading, setLoading]         = useState(true);
@@ -125,6 +140,12 @@ export default function SettingsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
   // 🔴 ERROR STATE
   if (error) {
     return (
@@ -171,6 +192,19 @@ export default function SettingsPage() {
           );
         })}
       </div>
+
+      {/* Log Out — mobile only. The mobile drawer that used to hold this
+          was removed in favor of a full bottom nav, so this is now the
+          phone entry point for signing out. Desktop keeps its sidebar button. */}
+      <button
+        onClick={handleLogout}
+        className="md:hidden w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl
+          bg-white border border-gray-100 shadow-sm text-sm font-medium text-red-600
+          active:bg-red-50 transition-colors"
+      >
+        <LogOut className="w-4 h-4" />
+        Log Out
+      </button>
 
       {/* Loading */}
       {loading ? (
@@ -285,11 +319,18 @@ export default function SettingsPage() {
               <CardHeader>
                 <h3 className="font-semibold">Privacy Notice</h3>
               </CardHeader>
-              <CardBody>
+              <CardBody className="space-y-3">
                 <p className="text-sm text-gray-500">
                   View our full privacy notice on the{' '}
                   <a href="/privacy" className="text-teal-700 underline hover:text-teal-800">
                     Privacy Notice page
+                  </a>.
+                </p>
+                <p className="text-sm text-gray-500 flex items-center gap-1.5">
+                  <Cookie className="w-4 h-4 text-teal-700 flex-shrink-0" />
+                  See what cookies we use on the{' '}
+                  <a href="/cookie-policy" className="text-teal-700 underline hover:text-teal-800">
+                    Cookie Policy page
                   </a>.
                 </p>
               </CardBody>
