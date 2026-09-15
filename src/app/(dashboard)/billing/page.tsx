@@ -1,6 +1,9 @@
+//src\app\(dashboard)\billing\page.tsx
+
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Patient, Billing, Payment, PatientBillingSummary } from '@/types';
 import { BillingTable } from '@/components/billing/BillingTable';
@@ -14,6 +17,8 @@ import { TrendingUp, Receipt, AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function BillingPage() {
   const toast = useAppToast();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [summaries, setSummaries] = useState<PatientBillingSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +92,15 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Open Add Charge modal when the dashboard's quick action links here
+  // with ?action=new, then strip the param so a refresh doesn't reopen it.
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      setShowChargeModal(true);
+      router.replace('/billing');
+    }
+  }, [searchParams, router]);
 
   function openCharge(patientId?: string) {
     setPrefillPatientId(patientId);
