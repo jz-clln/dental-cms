@@ -24,6 +24,47 @@
        instead of relying on every single component to opt in correctly. */
     @apply font-sans text-ink-700 bg-porcelain-50;
   }
+
+  /* Custom scrollbar: plain light grey thumb, same flat color on both
+     WebKit and Firefox — no gradient, so there's nothing that only shows
+     up in one browser/render path and nothing to override by accident
+     the way the old two-color gradient kept getting hidden or clashed
+     with. `*` (not just html/body) is deliberate: the sidebar nav, the
+     main content pane, dropdown listboxes, and any overflow-x-auto row
+     (like the settings tabs) are all independently scrollable elements,
+     and this way every one of them gets the same thumb without needing a
+     class on each. Hover/active still transition smoothly via `filter`. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 9999px;
+    transition: filter 0.25s ease, opacity 0.25s ease;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    filter: brightness(0.85);
+  }
+
+  *::-webkit-scrollbar-thumb:active {
+    filter: brightness(0.7);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 @layer utilities {
