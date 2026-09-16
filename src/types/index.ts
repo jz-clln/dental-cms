@@ -22,8 +22,6 @@ export interface Dentist {
   id: string;
   clinic_id: string;
   name: string;
-  first_name: string | null;
-  last_name: string | null;
   specialty: string | null;
   schedule_days: string[] | null;
   created_at: string;
@@ -55,10 +53,14 @@ export interface PatientJoin {
   contact_number: string | null;
 }
 
+// FIX: was { id, first_name, last_name }. Those columns were dropped from
+// the dentists table (see drop_dentist_name_columns.sql) — they were never
+// actually written anywhere (DentistsPanel's form only ever collected a
+// single `name` field), so every join select using them was pulling
+// nothing. `name` is the field that's actually populated.
 export interface DentistJoin {
   id: string;
-  first_name: string | null;
-  last_name: string | null;
+  name: string;
 }
 
 export interface Appointment {
