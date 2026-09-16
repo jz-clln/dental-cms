@@ -1,6 +1,15 @@
+// src/components/appointments/WeeklyCalendar.tsx
+//
+// UPDATE: legend row is now horizontally centered in its container.
+// Centering is applied only in the normal (auto-fit) case — if a device
+// is narrow enough to hit the rare scroll-fallback safety net, the row
+// stays left-aligned there instead, since centering a scrollable row
+// would start the user off with the first item hidden off-screen, which
+// defeats the "see everything" goal this was built for.
+
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Appointment } from '@/types';
 import { formatTime, getPatientName } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -36,6 +45,113 @@ const DRAG_OVER_COLORS: Record<string, string> = {
 
 const DAY_NAMES      = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// ── Status legend — fluid auto-fit sizing ──────────────────────────────
+// All values below are the "natural" (scale = 1) sizes. Every one of them
+// gets multiplied by the same computed `scale` factor, so shrinking is
+// always proportional — never just the text, or just the gaps.
+const LEGEND_BASE_FONT     = 11; // px
+const LEGEND_MIN_FONT      = 7;  // px — never go smaller than this
+const LEGEND_BASE_DOT      = 6;  // px, dot diameter
+const LEGEND_BASE_DOT_GAP  = 6;  // px, gap between dot and label
+const LEGEND_BASE_ITEM_GAP = 16; // px, gap between legend items
+const LEGEND_MIN_SCALE     = LEGEND_MIN_FONT / LEGEND_BASE_FONT;
+
+function StatusLegend() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const measure = measureRef.current;
+    if (!container || !measure) return;
+
+    function recalc() {
+      const available = container!.clientWidth;
+      const natural = measure!.scrollWidth;
+      if (!available || !natural) return;
+      // 0.97 leaves a hair of breathing room so sub-pixel rounding can
+      // never tip the row into overflow right at the boundary.
+      const raw = (available * 0.97) / natural;
+      setScale(Math.min(1, Math.max(LEGEND_MIN_SCALE, raw)));
+    }
+
+    recalc();
+
+    const ro = new ResizeObserver(recalc);
+    ro.observe(container);
+
+    // Web fonts (Poppins) swap in asynchronously — re-measure once they're
+    // actually loaded, since fallback-font metrics can differ slightly.
+    let cancelled = false;
+    document.fonts?.ready?.then(() => { if (!cancelled) recalc(); });
+
+    return () => {
+      cancelled = true;
+      ro.disconnect();
+    };
+  }, []);
+
+  const fontSize = LEGEND_BASE_FONT * scale;
+  const dotSize  = LEGEND_BASE_DOT * scale;
+  const dotGap   = LEGEND_BASE_DOT_GAP * scale;
+  const itemGap  = LEGEND_BASE_ITEM_GAP * scale;
+
+  // Last-resort safety net only — with the min-font floor, real phones
+  // should never actually need this, but it guarantees no clipping or
+  // overlap even on a device narrower than anything reasonably expected.
+  const needsScrollFallback = scale <= LEGEND_MIN_SCALE;
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        'px-4 py-2 border-t border-gray-50 bg-gray-50/50 flex items-center',
+        needsScrollFallback
+          ? 'justify-start overflow-x-auto [&::-webkit-scrollbar]:hidden'
+          : 'justify-center'
+      )}
+      style={needsScrollFallback ? { scrollbarWidth: 'none', msOverflowStyle: 'none' } : undefined}
+    >
+      {/* Hidden natural-size measurer. The 0×0, overflow-hidden wrapper
+          clips it to nothing visually and contributes zero size to any
+          ancestor's layout — but the inner element still sizes itself to
+          its true content width (`width: max-content` ignores the
+          collapsed parent), so `scrollWidth` always reports the real,
+          unscaled width regardless of what the visible row is currently
+          shrunk to. */}
+      <div style={{ position: 'absolute', overflow: 'hidden', width: 0, height: 0 }}>
+        <div
+          ref={measureRef}
+          aria-hidden
+          className="flex items-center"
+          style={{ width: 'max-content', whiteSpace: 'nowrap', gap: LEGEND_BASE_ITEM_GAP, fontSize: LEGEND_BASE_FONT }}
+        >
+          {Object.entries(SLOT_DOT).map(([status, dotCls]) => (
+            <div key={status} className="flex items-center" style={{ gap: LEGEND_BASE_DOT_GAP }}>
+              <span className={cn('rounded-full flex-shrink-0', dotCls)} style={{ width: LEGEND_BASE_DOT, height: LEGEND_BASE_DOT }} />
+              <span className="text-gray-400 font-medium">{status}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Visible row — real sizes, all derived from the one computed
+          `scale`, so the whole legend fits exactly, on any device. */}
+      <div className="flex items-center flex-nowrap" style={{ gap: itemGap }}>
+        {Object.entries(SLOT_DOT).map(([status, dotCls]) => (
+          <div key={status} className="flex items-center flex-shrink-0" style={{ gap: dotGap }}>
+            <span className={cn('rounded-full flex-shrink-0', dotCls)} style={{ width: dotSize, height: dotSize }} />
+            <span className="text-gray-400 font-medium whitespace-nowrap" style={{ fontSize }}>
+              {status}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface WeeklyCalendarProps {
   appointments: Appointment[];
@@ -515,14 +631,7 @@ export function WeeklyCalendar({
       )}
 
       {/* ── Legend ── */}
-      <div className="px-4 py-2 border-t border-gray-50 bg-gray-50/50 flex flex-wrap gap-x-4 gap-y-1">
-        {Object.entries(SLOT_DOT).map(([status, dotCls]) => (
-          <div key={status} className="flex items-center gap-1.5">
-            <span className={cn('w-1.5 h-1.5 rounded-full', dotCls)} />
-            <span className="text-[10px] text-gray-400 font-medium">{status}</span>
-          </div>
-        ))}
-      </div>
+      <StatusLegend />
     </div>
   );
 }
