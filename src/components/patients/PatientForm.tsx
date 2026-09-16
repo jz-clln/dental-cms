@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Patient, PatientFormData } from '@/types';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { useUnsavedChanges } from '@/lib/hooks/useUnsavedChanges';
 import { ShieldCheck } from 'lucide-react';
@@ -199,11 +200,12 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
 
         {/* Birthday & Contact */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
+          <DatePicker
             label="Birthday"
-            type="date"
-            value={form.birthday}
-            onChange={e => set('birthday', e.target.value)}
+            placeholder="Select birthday"
+            value={form.birthday ? new Date(`${form.birthday}T00:00:00`) : undefined}
+            onChange={date => set('birthday', date ? date.toLocaleDateString('en-CA') : '')}
+            maxDate={new Date()}
           />
           <Input
             label="Contact Number"
