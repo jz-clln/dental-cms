@@ -12,13 +12,12 @@ interface AppointmentListProps {
   loading?: boolean;
 }
 
-// FIX: DentistJoin has first_name/last_name, not a single name field.
+// FIX: DentistJoin is `{ id, name }` — first_name/last_name were dropped
+// from the dentists table (see drop_dentist_name_columns.sql) and never
+// existed on the type. No first/last to join anymore, so this just reads
+// the one field that's there.
 function getDentistName(dentist: Appointment['dentist']): string {
-  if (!dentist) return '—';
-  const first = dentist.first_name?.trim() ?? '';
-  const last  = dentist.last_name?.trim()  ?? '';
-  if (!first && !last) return '—';
-  return `${first} ${last}`.trim();
+  return dentist?.name?.trim() || '—';
 }
 
 export function AppointmentList({ appointments, loading }: AppointmentListProps) {
