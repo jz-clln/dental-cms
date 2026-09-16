@@ -38,10 +38,15 @@ export function usePrintSchedule() {
     // FIX: patient:patients(*) pulled every patient field — birthday,
     // address, email, consent flags — onto a printed paper schedule that
     // only ever displays name and contact number. Narrowed to match.
+    //
+    // FIX: dentist:dentists(id, first_name, last_name) was selecting two
+    // columns that are never actually populated (dentists only ever get a
+    // single `name` field written to them via DentistsPanel's form), so
+    // this column always printed "—". Selecting `name` instead.
     const [{ data, error }, { data: clinicData }] = await Promise.all([
       supabase
         .from('appointments')
-        .select('*, patient:patients(first_name, last_name, contact_number), dentist:dentists(id, first_name, last_name)')
+        .select('*, patient:patients(first_name, last_name, contact_number), dentist:dentists(id, name)')
         .eq('clinic_id', clinicId)
         .eq('appointment_date', targetDate)
         .order('appointment_time', { ascending: true }),
@@ -234,7 +239,7 @@ export function usePrintSchedule() {
                         : ''}
                     </td>
                     <td>${appt.treatment_type}</td>
-                    <td>${appt.dentist ? `${appt.dentist.first_name ?? ''} ${appt.dentist.last_name ?? ''}`.trim() || '—' : '—'}</td>
+                    <td>${appt.dentist?.name || '—'}</td>
                     <td>
                       <span class="status-badge" style="background:${STATUS_COLORS[appt.status] ?? '#f1f5f9'}">
                         ${appt.status}
