@@ -196,7 +196,7 @@ export default function ReportsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">Reports</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Month</h2>
           <p className="text-sm text-gray-400 mt-0.5">{currentMonth}</p>
         </div>
         <button
