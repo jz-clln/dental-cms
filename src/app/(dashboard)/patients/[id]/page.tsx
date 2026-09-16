@@ -69,7 +69,10 @@ export default function PatientProfilePage() {
     const [patientRes, apptRes, billRes, payRes, toothRes] = await Promise.all([
       supabase.from('patients').select('*').eq('id', id).single(),
       supabase.from('appointments')
-        .select('*, dentist:dentists(id, first_name, last_name)')
+        // FIX: dentists.first_name / last_name were dropped (see
+        // drop_dentist_name_columns.sql) — dentists are keyed by a single
+        // `name` column now, same as DentistJoin in @/types.
+        .select('*, dentist:dentists(id, name)')
         .eq('patient_id', id)
         .gte('appointment_date', today)
         .order('appointment_date', { ascending: true })
@@ -281,7 +284,9 @@ export default function PatientProfilePage() {
                         <p className="text-xs text-gray-500 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           {formatTime(appt.appointment_time)}
-                          {appt.dentist && ` · ${[appt.dentist.first_name, appt.dentist.last_name].filter(Boolean).join(' ')}`}
+                          {/* FIX: dentist.first_name/last_name no longer exist —
+                              dentists are keyed by a single `name` column. */}
+                          {appt.dentist && ` · ${appt.dentist.name}`}
                         </p>
                       </div>
                       <Badge label={appt.status} />
