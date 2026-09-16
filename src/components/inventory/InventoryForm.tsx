@@ -1,3 +1,20 @@
+// src/components/inventory/InventoryForm.tsx
+//
+// UPDATE: swapped the plain `<Input type="date">` fields (last_restocked
+// in AddItemForm, restock date in RestockForm) for the project's own
+// `DatePicker` (@/components/ui/DatePicker). Deliberately NO `minDate` on
+// either — unlike appointments (always forward-looking), a restock entry
+// is frequently logged after the fact (backdating a delivery you forgot
+// to enter), so past dates must stay selectable. Left DatePicker's own
+// defaults (fromYear = current year - 100, toYear = current year) as-is
+// rather than overriding them, since those already fit "any past date,
+// nothing dated into the future" for stock logging.
+//
+// parseDateString/formatDateString are the same local-Y/M/D conversion
+// used in AppointmentForm.tsx (avoids the UTC-shift bug from
+// `new Date(dateStr)`/`.toISOString()`) — duplicated here rather than
+// shared, since there's no shared utils entry for it yet.
+
 'use client';
 
 import { useState } from 'react';
@@ -5,10 +22,27 @@ import { createClient } from '@/lib/supabase/client';
 import { InventoryItem, InventoryFormData } from '@/types';
 import { Input, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { INVENTORY_CATEGORIES, getTodayString } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { Plus, Minus, Package, AlertTriangle } from 'lucide-react';
+
+// form.last_restocked / date <-> DatePicker's Date object. Local Y/M/D
+// only — no UTC round-trip, so no off-by-one-day bug across timezones.
+function parseDateString(dateStr: string): Date | undefined {
+  if (!dateStr) return undefined;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+function formatDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 /* ─── ADD / EDIT ITEM FORM ─────────────────────────────────── */
 
@@ -152,12 +186,12 @@ export function AddItemForm({ clinicId, existing, onSuccess, onCancel, toast }: 
           />
         </div>
 
-        {/* Last restocked */}
-        <Input
+        {/* Last restocked — no minDate: this is often logged after the
+            fact, so past dates must stay pickable. */}
+        <DatePicker
           label="Last Restocked"
-          type="date"
-          value={form.last_restocked}
-          onChange={e => set('last_restocked', e.target.value)}
+          value={parseDateString(form.last_restocked)}
+          onChange={date => set('last_restocked', date ? formatDateString(date) : '')}
         />
 
         {/* Actions */}
@@ -376,13 +410,13 @@ export function RestockForm({ item, onSuccess, onCancel, toast }: RestockFormPro
           </div>
         )}
 
-        {/* Restock date — only for add mode */}
+        {/* Restock date — only for add mode. No minDate: backdating a
+            delivery you forgot to log needs to stay possible. */}
         {mode === 'add' && (
-          <Input
+          <DatePicker
             label="Restock Date"
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
+            value={parseDateString(date)}
+            onChange={d => setDate(d ? formatDateString(d) : '')}
           />
         )}
 
