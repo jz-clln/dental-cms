@@ -109,14 +109,34 @@ export async function fetchAppointments(
   signal: AbortSignal,
 ): Promise<Appointment[]> {
   const today = getLocalDateString();
-  const { data } = await supabase
+
+  // FIX: dentist:dentists(id, first_name, last_name) selected columns
+  // that were dropped from the dentists table (see
+  // drop_dentist_name_columns.sql) — dentists only have `id`/`name` now,
+  // matching DentistJoin (types/index.ts). Postgres rejects a select
+  // referencing a column that doesn't exist, so this entire query was
+  // failing on every load. `error` wasn't being captured below, so
+  // `data` coming back null silently became `[]` via `data ?? []` —
+  // nothing ever surfaced the failure. That's why BiteyCard (which
+  // computes its own "Today's appts" from this array) showed 0, while
+  // the StatCard showing the real count reads from fetchStats' separate
+  // count-only query, which never touches dentists and so never broke.
+  const { data, error } = await supabase
     .from('appointments')
-    .select('*, patient:patients(first_name, last_name, contact_number), dentist:dentists(id, first_name, last_name)')
+    .select('*, patient:patients(first_name, last_name, contact_number), dentist:dentists(id, name)')
     .eq('clinic_id', clinicId)
     .eq('appointment_date', today)
     .order('appointment_time')
     .returns<Appointment[]>()
     .abortSignal(signal);
+
+  if (error) {
+    // Surfaced now instead of silently swallowed — this exact failure
+    // mode (a stale column name breaking the query outright) was
+    // invisible before because nothing logged it.
+    console.error('fetchAppointments failed:', error);
+  }
+
   return data ?? [];
 }
 
