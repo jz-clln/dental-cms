@@ -6,6 +6,12 @@
 // stays left-aligned there instead, since centering a scrollable row
 // would start the user off with the first item hidden off-screen, which
 // defeats the "see everything" goal this was built for.
+//
+// FIX: the list-view subtitle read `appt.dentist?.first_name` — that
+// column is never actually populated (dentists only ever get a single
+// `name` field written to them), so the dentist name never showed up
+// here. Switched to `appt.dentist?.name`, matching the dentist:dentists(id,
+// name) join now used in appointments/page.tsx.
 
 'use client';
 
@@ -39,8 +45,8 @@ const DRAG_OVER_COLORS: Record<string, string> = {
   Scheduled: 'ring-1 ring-blue-300 bg-blue-50/60',
   Confirmed: 'ring-1 ring-teal-300 bg-teal-50/60',
   Done:      'ring-1 ring-green-300 bg-green-50/60',
-  'No-show': 'ring-1 ring-red-300 bg-red-50/60',
-  Cancelled: 'ring-1 ring-gray-300 bg-gray-50/60',
+  'No-show':  'ring-1 ring-red-300 bg-red-50/60',
+  Cancelled:  'ring-1 ring-gray-300 bg-gray-50/60',
 };
 
 const DAY_NAMES      = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -573,7 +579,7 @@ export function WeeklyCalendar({
                               </p>
                               <p className="text-[10px] text-gray-400 truncate">
                                 {appt.treatment_type}
-                                {appt.dentist?.first_name ? ` · ${appt.dentist.first_name} ${appt.dentist.last_name ?? ''}`.trim() : ''}
+                                {appt.dentist?.name ? ` · ${appt.dentist.name}` : ''}
                               </p>
                             </div>
                             <Badge label={appt.status} />

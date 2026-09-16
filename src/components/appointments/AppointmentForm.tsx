@@ -25,6 +25,17 @@
 // appointment already happened — the stored value stays valid and still
 // submits, it just can't be re-picked from the calendar once closed and
 // reopened. Flag if past-dated edits need to stay pickable.
+//
+// UPDATE: the dentist dropdown is now filtered by availability —
+// Dentist.schedule_days (set in DentistsPanel) is checked against the
+// selected date's weekday, computed locally via getDayName/
+// parseDateString for the same UTC-shift reasons as above. A dentist with
+// no schedule_days configured is treated as always available (no
+// restriction set yet), rather than hidden from every date. If the
+// currently-selected dentist becomes unavailable — most commonly because
+// the date was just changed — they're kept in the list (so the field
+// doesn't go blank) but clearly labeled and blocked at validate(), so an
+// unavailable dentist can be seen but never actually saved.
 
 'use client';
 
@@ -84,6 +95,19 @@ function formatDateString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// Weekday name for a "YYYY-MM-DD" string, matching the day names stored in
+// Dentist.schedule_days (DentistsPanel's DAYS array: 'Monday', 'Tuesday', …).
+function getDayName(dateStr: string): string | null {
+  const date = parseDateString(dateStr);
+  return date ? date.toLocaleDateString('en-US', { weekday: 'long' }) : null;
+}
+
+function isDentistAvailable(d: Dentist, day: string | null): boolean {
+  // No schedule configured yet → treat as always available rather than
+  // hidden from every date.
+  return !d.schedule_days?.length || !day || d.schedule_days.includes(day);
+}
+
 export function AppointmentForm({
   clinicId, existing, prefillPatientId, onSuccess, onCancel, toast,
 }: AppointmentFormProps) {
@@ -115,6 +139,13 @@ export function AppointmentForm({
   };
 
   const [form, setForm] = useState<AppointmentFormData>(initialForm);
+
+  // ── Dentist availability for the selected date ──────────────────────
+  const selectedDay = getDayName(form.appointment_date);
+  const availableDentists = dentists.filter(d => isDentistAvailable(d, selectedDay));
+  const currentDentist = dentists.find(d => d.id === form.dentist_id);
+  const currentDentistUnavailable =
+    !!form.dentist_id && !!currentDentist && !isDentistAvailable(currentDentist, selectedDay);
 
   const isDirty = !submitted && (
     form.patient_id !== initialForm.patient_id ||
@@ -160,7 +191,7 @@ export function AppointmentForm({
 
   // ── Conflict check ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (!form.dentist_id || !form.appointment_date || !form.appointment_time) {
+    if (!form.dentist_id || !form.appointment_date || !form.appointment_time || currentDentistUnavailable) {
       setConflict(null);
       return;
     }
@@ -189,7 +220,7 @@ export function AppointmentForm({
         const dentist = dentists.find(d => d.id === form.dentist_id);
         const patient = conflicting.patient as any;
         setConflict({
-          dentistName: dentist ? `${dentist.first_name} ${dentist.last_name}`.trim() : 'This dentist',
+          dentistName: dentist?.name ?? 'This dentist',
           time: form.appointment_time,
           patientName: patient
             ? `${patient.first_name} ${patient.last_name}`
@@ -203,7 +234,7 @@ export function AppointmentForm({
     }, 400);
 
     return () => { if (conflictTimerRef.current) clearTimeout(conflictTimerRef.current); };
-  }, [form.dentist_id, form.appointment_date, form.appointment_time, dentists, clinicId, existing?.id]);
+  }, [form.dentist_id, form.appointment_date, form.appointment_time, dentists, clinicId, existing?.id, currentDentistUnavailable]);
 
   const filteredPatients = patients.filter(p =>
     getPatientName(p).toLowerCase().includes(patientSearch.toLowerCase()) ||
@@ -223,7 +254,11 @@ export function AppointmentForm({
     if (!form.treatment_type) e.treatment_type = 'Please select a treatment type.';
     if (!form.appointment_date) e.appointment_date = 'Please pick a date.';
     if (!form.appointment_time) e.appointment_time = 'Please pick a time.';
-    if (!form.dentist_id) e.dentist_id = 'Please assign a dentist.';
+    if (!form.dentist_id) {
+      e.dentist_id = 'Please assign a dentist.';
+    } else if (currentDentistUnavailable) {
+      e.dentist_id = `${currentDentist?.name ?? 'This dentist'} isn't scheduled to work on ${selectedDay}s.`;
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -275,7 +310,19 @@ export function AppointmentForm({
 
   // Build option arrays for CustomSelect
   const treatmentOptions = TREATMENT_TYPES.map(t => ({ value: t, label: t }));
-  const dentistOptions = dentists.map(d => ({ value: d.id, label: d.name }));
+  // Only dentists scheduled to work on the selected date. The current
+  // selection is grandfathered in (clearly labeled) if it's no longer
+  // available, so the field doesn't silently go blank out from under the
+  // user — validate() is what actually blocks saving it.
+  const dentistOptions = [
+    ...availableDentists,
+    ...(currentDentistUnavailable && currentDentist ? [currentDentist] : []),
+  ].map(d => ({
+    value: d.id,
+    label: currentDentistUnavailable && d.id === currentDentist?.id
+      ? `${d.name} — not scheduled ${selectedDay}s`
+      : d.name,
+  }));
   const statusOptions = STATUSES.map(s => ({ value: s, label: s }));
 
   return (
@@ -374,6 +421,9 @@ export function AppointmentForm({
             {checkingConflict && (
               <p className="text-xs text-gray-400">Checking availability…</p>
             )}
+            {!checkingConflict && selectedDay && availableDentists.length === 0 && !currentDentistUnavailable && (
+              <p className="text-xs text-amber-600">No dentists are scheduled to work on {selectedDay}s.</p>
+            )}
           </div>
           <CustomSelect
             label="Status"
@@ -382,6 +432,19 @@ export function AppointmentForm({
             options={statusOptions}
           />
         </div>
+
+        {/* Dentist unavailable warning */}
+        {currentDentistUnavailable && (
+          <div className="flex items-start gap-3 px-4 py-3.5 bg-amber-50 border border-amber-200 rounded-xl">
+            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Dentist unavailable</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                {currentDentist?.name} doesn't work on {selectedDay}s. Please choose a different dentist.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Conflict warning */}
         {conflict && (

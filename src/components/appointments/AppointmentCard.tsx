@@ -80,7 +80,7 @@ const AppointmentCard = React.memo(function AppointmentCard({
           </div>
           <div>
             <p className="font-semibold text-gray-900">{getPatientName(appointment.patient)}</p>
-            {appointment.patient?.contact_number && (          // ← this line
+            {appointment.patient?.contact_number && (
               <p className="text-xs text-gray-500">{appointment.patient.contact_number}</p>
             )}
           </div>
@@ -113,10 +113,13 @@ const AppointmentCard = React.memo(function AppointmentCard({
             <User className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
             <div>
               <p className="text-xs text-gray-400">Dentist</p>
+              {/* FIX: dentist.first_name/last_name are never populated —
+                  DentistsPanel's form only writes a single `name` field —
+                  so this used to interpolate `null` straight into the
+                  string ("null"). DentistJoin (types/index.ts) and every
+                  dentist:dentists(...) select now use `name` instead. */}
               <p className="text-sm font-medium text-gray-900">
-                {appointment.dentist
-                  ? `${appointment.dentist.first_name} ${appointment.dentist.last_name ?? ''}`.trim()
-                  : '—'}
+                {appointment.dentist?.name || '—'}
               </p>
             </div>
           </div>
