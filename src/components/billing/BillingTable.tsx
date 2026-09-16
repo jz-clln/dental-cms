@@ -41,49 +41,63 @@ export function BillingTable({
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex flex-wrap gap-2 items-center">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search patient…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="pl-9 pr-4 py-2 rounded-lg border border-gray-200 text-sm w-48
-                focus:outline-none focus:ring-2 focus:ring-teal-500 hover:border-gray-300 transition-colors"
-            />
-          </div>
-
-          {/* Status tabs */}
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden bg-white">
-            {STATUS_TABS.map(tab => (
-              <button
-                key={tab}
-                onClick={() => setStatusFilter(tab)}
-                className={cn(
-                  'px-3 py-2 text-xs font-medium transition-colors',
-                  statusFilter === tab
-                    ? 'bg-teal-700 text-white'
-                    : 'text-gray-500 hover:bg-gray-50'
-                )}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+      {/* CHANGED: search now always gets its own full-width row (standard
+          mobile pattern — a search field deserves room to type in).
+          Status tabs + action buttons now ALWAYS share a single row,
+          on every device — never split across two lines. If that row
+          ever runs out of horizontal room, the TABS scroll (overflow-x
+          on their own wrapper only); the buttons are flex-shrink-0 and
+          pinned to the right, so they never wrap or get pushed off. */}
+      <div className="space-y-2.5">
+        {/* Search — own row */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search patient…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full sm:w-48 pl-9 pr-4 py-2 rounded-lg border border-gray-200 text-sm
+              focus:outline-none focus:ring-2 focus:ring-teal-500 hover:border-gray-300 transition-colors"
+          />
         </div>
 
-        <div className="flex gap-2">
-          <Button size="sm" variant="secondary" onClick={() => onRecordPayment()}>
-            <CreditCard className="w-4 h-4" />
-            <span className="hidden sm:inline">Record Payment</span>
-          </Button>
-          <Button size="sm" onClick={() => onAddCharge()}>
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Add Charge</span>
-          </Button>
+        {/* Status tabs + action buttons — one row, always */}
+        <div className="flex items-center justify-between gap-2">
+          {/* Tabs — the only part allowed to scroll if space runs out */}
+          <div
+            className="min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden bg-white w-max">
+              {STATUS_TABS.map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setStatusFilter(tab)}
+                  className={cn(
+                    'px-3 py-2 text-xs font-medium transition-colors flex-shrink-0 whitespace-nowrap',
+                    statusFilter === tab
+                      ? 'bg-teal-700 text-white'
+                      : 'text-gray-500 hover:bg-gray-50'
+                  )}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Buttons — never shrink, never wrap, always visible */}
+          <div className="flex gap-2 flex-shrink-0">
+            <Button size="sm" variant="secondary" onClick={() => onRecordPayment()}>
+              <CreditCard className="w-4 h-4" />
+              <span className="hidden sm:inline">Record Payment</span>
+            </Button>
+            <Button size="sm" onClick={() => onAddCharge()}>
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add Charge</span>
+            </Button>
+          </div>
         </div>
       </div>
 
