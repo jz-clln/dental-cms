@@ -1,3 +1,5 @@
+//src\components\settings\ClinicInfoForm.tsx
+
 'use client';
 
 import { useState } from 'react';
