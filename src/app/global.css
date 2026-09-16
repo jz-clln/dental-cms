@@ -3,6 +3,12 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* UPDATE: single source of truth for the status-bar fill so it can't
+     drift out of sync with manifest.json / layout.tsx theme_color. */
+  --status-bar-color: #004730;
+}
+
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;
@@ -23,6 +29,26 @@
        from tailwind.config.ts, so the whole app now has one true default
        instead of relying on every single component to opt in correctly. */
     @apply font-sans text-ink-700 bg-porcelain-50;
+    position: relative;
+  }
+
+  /* UPDATE: this is the actual fix for the status bar. iOS ignores
+     manifest.json's theme_color entirely for installed PWAs — with
+     statusBarStyle: 'black-translucent' (set in layout.tsx) the app's
+     own content is drawn underneath the status bar, and this fixed strip
+     is what paints that region instead of leaving it transparent/white.
+     env(safe-area-inset-top) is 0 on devices without a notch/Dynamic
+     Island, so this is a no-op there — safe to ship everywhere. */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top);
+    background-color: var(--status-bar-color);
+    z-index: 9999;
+    pointer-events: none;
   }
 
   /* Custom scrollbar: plain light grey thumb, same flat color on both

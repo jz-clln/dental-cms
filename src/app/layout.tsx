@@ -4,6 +4,14 @@
 // covers every route (public pages and the dashboard) rather than being
 // duplicated per layout. See src/components/legal/CookieBanner.tsx for
 // why this is a notice, not a full consent manager.
+//
+// UPDATE: statusBarStyle 'default' -> 'black-translucent' + viewportFit
+// 'cover'. This is what lets content draw *under* the iOS status bar
+// instead of iOS painting a plain white bar on top of you — the actual
+// color behind the clock/wifi/battery icons now comes from the
+// safe-area-inset-top block in global.css, not from this file alone.
+// themeColor here covers non-iOS browser chrome (e.g. Android Chrome's
+// address bar in non-installed mode).
 import type { Metadata, Viewport } from 'next';
 import { Poppins } from 'next/font/google';
 import { GeistMono } from 'geist/font/mono';
@@ -27,13 +35,14 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'Bitey - Dental Clinic Management System',
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0f766e',
+  themeColor: '#004730',
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
