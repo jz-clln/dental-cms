@@ -159,7 +159,7 @@ const BITEY_MESSAGE_VARIANTS: Record<BiteyEmotion, BiteyMessageBuilder[]> = {
 
   happy: [
     ctx =>
-      `Appointments today: ${ctx.total}.\n` +
+      `You have ${ctx.total} appointments today\n` +
       'Nothing needs your attention right now.\n' +
       'A steady day so far.',
     ctx =>
