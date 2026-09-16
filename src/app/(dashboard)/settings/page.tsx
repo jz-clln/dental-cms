@@ -12,11 +12,18 @@
 // specifically tuned for (see the max-w-* comment below). Terms isn't
 // linked from this card either; only the Cookie Policy link was added,
 // per what was actually asked for.
+//
+// REVISION 3: added a "Plans & Billing" card to the Clinic Info tab,
+// linking to /settings/billing. That route already existed (linked from
+// TrialBanner and TrialCountdown) but nothing on this page pointed to
+// it. Same reasoning as REVISION 2 — a plain link in a card, not a 7th
+// tab, matching the existing Privacy card's link style exactly.
 
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Clinic, Staff, Dentist } from '@/types';
 import { Card, CardHeader, CardBody } from '@/components/ui/Card';
@@ -233,6 +240,17 @@ export default function SettingsPage() {
                 </CardBody>
               </Card>
               <Card>
+                <CardHeader><h3 className="font-semibold">Plans & Billing</h3></CardHeader>
+                <CardBody>
+                  <p className="text-sm text-gray-500">
+                    View your current plan, trial status, and upgrade options on the{' '}
+                    <Link href="/settings/billing" className="text-teal-700 underline hover:text-teal-800">
+                      Plans & Billing page
+                    </Link>.
+                  </p>
+                </CardBody>
+              </Card>
+              <Card>
                 <CardHeader><h3 className="font-semibold">Help</h3></CardHeader>
                 <CardBody className="space-y-3">
                   <ReplayTutorialButton />
@@ -320,18 +338,30 @@ export default function SettingsPage() {
                 <h3 className="font-semibold">Privacy Notice</h3>
               </CardHeader>
               <CardBody className="space-y-3">
-                <p className="text-sm text-gray-500">
-                  View our full privacy notice on the{' '}
-                  <a href="/privacy" className="text-teal-700 underline hover:text-teal-800">
-                    Privacy Notice page
-                  </a>.
+                <p className="flex items-center gap-1.5 text-sm text-gray-500">
+                  <ShieldCheck className="w-4 h-4 text-teal-700 flex-shrink-0" />
+                  <span>
+                    View our full privacy notice on{' '}
+                    <a
+                      href="/privacy"
+                      className="text-teal-700 underline hover:text-teal-800"
+                    >
+                      Privacy Notice page
+                    </a>.
+                  </span>
                 </p>
-                <p className="text-sm text-gray-500 flex items-center gap-1.5">
+
+                <p className="flex items-center gap-1.5 text-sm text-gray-500">
                   <Cookie className="w-4 h-4 text-teal-700 flex-shrink-0" />
-                  See what cookies we use on the{' '}
-                  <a href="/cookie-policy" className="text-teal-700 underline hover:text-teal-800">
-                    Cookie Policy page
-                  </a>.
+                  <span>
+                    See what cookies we use on the{' '}
+                    <a
+                      href="/cookie-policy"
+                      className="text-teal-700 underline hover:text-teal-800"
+                    >
+                      Cookie Policy page
+                    </a>.
+                  </span>
                 </p>
               </CardBody>
             </Card>
