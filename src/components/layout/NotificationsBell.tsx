@@ -17,6 +17,29 @@
 // - Interactive icon buttons (mark read, dismiss, bell) get
 //   `active:animate-press` — the tactile press feedback your config
 //   defines but never uses anywhere.
+//
+// REVISION: generateNotifications() used to only run when the panel was
+// opened (see the `[clinicId, open]` effect below) — nothing scanned
+// inventory/appointments/billing/payments in the background, so the
+// Realtime subscription on `notifications` had nothing to react to until
+// a click forced a scan. Two additions fix this:
+//   1. A Realtime listener on the four source tables that re-runs the
+//      scan (debounced) the moment relevant data actually changes —
+//      mirrors the exact pattern useDashboard.ts already uses.
+//   2. A 5-minute interval backstop, because "appointment starting in
+//      the next hour" depends on the current time, not just on data
+//      changing — an appointment can drift into that window with
+//      nothing in the database changing at all.
+// Also added a generatingRef guard around generateNotifications itself,
+// since it can now be triggered from three places (open, realtime,
+// interval) instead of one — this stops two overlapping calls from
+// racing on the delete-then-insert step.
+//
+// NOTE: this only works once Realtime is actually enabled for
+// inventory_items, appointments, billing, and payments in Supabase
+// (Database → Tables → the Realtime toggle) — same switch as
+// `notifications` already has. The code has always been ready for this;
+// those four tables just weren't broadcasting changes yet.
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -49,6 +72,7 @@ export function NotificationsBell() {
   const [generating, setGenerating] = useState(false);
   const [clinicId, setClinicId] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const generatingRef = useRef(false);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -93,106 +117,112 @@ export function NotificationsBell() {
 
   // Generate fresh notifications by scanning DB
   const generateNotifications = useCallback(async () => {
-    if (!clinicId) return;
+    if (!clinicId || generatingRef.current) return;
+    generatingRef.current = true;
     setGenerating(true);
-    const supabase = createClient();
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
 
-    // Get next hour window for upcoming appointments
-    const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
-    const timeNow = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    const timeHour = `${inOneHour.getHours().toString().padStart(2, '0')}:${inOneHour.getMinutes().toString().padStart(2, '0')}`;
+    try {
+      const supabase = createClient();
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
 
-    const [inventoryRes, appointmentsRes, billRes, payRes, patientsRes] = await Promise.all([
-      supabase.from('inventory_items').select('item_name, quantity, reorder_level').eq('clinic_id', clinicId),
-      supabase.from('appointments')
-        .select('*, patient:patients(first_name, last_name)')
-        .eq('clinic_id', clinicId)
-        .eq('appointment_date', todayStr)
-        .in('status', ['Scheduled', 'Confirmed'])
-        .gte('appointment_time', timeNow)
-        .lte('appointment_time', timeHour),
-      supabase.from('billing').select('patient_id, amount_charged').eq('clinic_id', clinicId),
-      supabase.from('payments').select('patient_id, amount_paid').eq('clinic_id', clinicId),
-      supabase.from('patients').select('id, first_name, last_name').eq('clinic_id', clinicId).eq('archived', false),
-    ]);
+      // Get next hour window for upcoming appointments
+      const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
+      const timeNow = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      const timeHour = `${inOneHour.getHours().toString().padStart(2, '0')}:${inOneHour.getMinutes().toString().padStart(2, '0')}`;
 
-    const toInsert: Omit<Notification, 'id' | 'created_at'>[] = [];
+      const [inventoryRes, appointmentsRes, billRes, payRes, patientsRes] = await Promise.all([
+        supabase.from('inventory_items').select('item_name, quantity, reorder_level').eq('clinic_id', clinicId),
+        supabase.from('appointments')
+          .select('*, patient:patients(first_name, last_name)')
+          .eq('clinic_id', clinicId)
+          .eq('appointment_date', todayStr)
+          .in('status', ['Scheduled', 'Confirmed'])
+          .gte('appointment_time', timeNow)
+          .lte('appointment_time', timeHour),
+        supabase.from('billing').select('patient_id, amount_charged').eq('clinic_id', clinicId),
+        supabase.from('payments').select('patient_id, amount_paid').eq('clinic_id', clinicId),
+        supabase.from('patients').select('id, first_name, last_name').eq('clinic_id', clinicId).eq('archived', false),
+      ]);
 
-    // 1. Low stock alerts
-    for (const item of inventoryRes.data ?? []) {
-      if (item.quantity <= item.reorder_level) {
+      const toInsert: Omit<Notification, 'id' | 'created_at'>[] = [];
+
+      // 1. Low stock alerts
+      for (const item of inventoryRes.data ?? []) {
+        if (item.quantity <= item.reorder_level) {
+          toInsert.push({
+            clinic_id: clinicId,
+            title: 'Low Stock Alert',
+            body: `${item.item_name} is running low (${item.quantity} remaining, reorder at ${item.reorder_level}).`,
+            type: 'low_stock',
+            read: false,
+            href: '/inventory',
+          } as any);
+        }
+      }
+
+      // 2. Upcoming appointments (next hour)
+      for (const appt of appointmentsRes.data ?? []) {
+        const patientName = appt.patient
+          ? `${appt.patient.first_name} ${appt.patient.last_name}`
+          : 'A patient';
         toInsert.push({
           clinic_id: clinicId,
-          title: 'Low Stock Alert',
-          body: `${item.item_name} is running low (${item.quantity} remaining, reorder at ${item.reorder_level}).`,
-          type: 'low_stock',
+          title: 'Upcoming Appointment',
+          body: `${patientName} has a ${appt.treatment_type} appointment starting soon.`,
+          type: 'appointment',
           read: false,
-          href: '/inventory',
+          href: `/appointments?id=${appt.id}`,
         } as any);
       }
-    }
 
-    // 2. Upcoming appointments (next hour)
-    for (const appt of appointmentsRes.data ?? []) {
-      const patientName = appt.patient
-        ? `${appt.patient.first_name} ${appt.patient.last_name}`
-        : 'A patient';
-      toInsert.push({
-        clinic_id: clinicId,
-        title: 'Upcoming Appointment',
-        body: `${patientName} has a ${appt.treatment_type} appointment starting soon.`,
-        type: 'appointment',
-        read: false,
-        href: `/appointments?id=${appt.id}`,
-      } as any);
-    }
+      // 3. Overdue balances (balance > 0)
+      const billing = billRes.data ?? [];
+      const payments = payRes.data ?? [];
+      const patients = patientsRes.data ?? [];
 
-    // 3. Overdue balances (balance > 0)
-    const billing = billRes.data ?? [];
-    const payments = payRes.data ?? [];
-    const patients = patientsRes.data ?? [];
-
-    const balanceMap: Record<string, number> = {};
-    for (const b of billing) {
-      balanceMap[b.patient_id] = (balanceMap[b.patient_id] ?? 0) + b.amount_charged;
-    }
-    for (const p of payments) {
-      balanceMap[p.patient_id] = (balanceMap[p.patient_id] ?? 0) - p.amount_paid;
-    }
-
-    for (const [patientId, balance] of Object.entries(balanceMap)) {
-      if (balance > 0) {
-        const patient = patients.find(p => p.id === patientId);
-        if (!patient) continue;
-        toInsert.push({
-          clinic_id: clinicId,
-          title: 'Outstanding Balance',
-          body: `${patient.first_name} ${patient.last_name} has an unpaid balance of ${formatPeso(balance)}.`,
-          type: 'balance',
-          read: false,
-          href: `/billing`,
-        } as any);
+      const balanceMap: Record<string, number> = {};
+      for (const b of billing) {
+        balanceMap[b.patient_id] = (balanceMap[b.patient_id] ?? 0) + b.amount_charged;
       }
+      for (const p of payments) {
+        balanceMap[p.patient_id] = (balanceMap[p.patient_id] ?? 0) - p.amount_paid;
+      }
+
+      for (const [patientId, balance] of Object.entries(balanceMap)) {
+        if (balance > 0) {
+          const patient = patients.find(p => p.id === patientId);
+          if (!patient) continue;
+          toInsert.push({
+            clinic_id: clinicId,
+            title: 'Outstanding Balance',
+            body: `${patient.first_name} ${patient.last_name} has an unpaid balance of ${formatPeso(balance)}.`,
+            type: 'balance',
+            read: false,
+            href: `/billing`,
+          } as any);
+        }
+      }
+
+      // Only delete the specific types we're about to re-insert, never wipe everything
+      if (toInsert.length > 0) {
+        const typesToReplace = [...new Set(toInsert.map((n: any) => n.type))];
+
+        await supabase
+          .from('notifications')
+          .delete()
+          .eq('clinic_id', clinicId)
+          .eq('read', false)
+          .in('type', typesToReplace);
+
+        await supabase.from('notifications').insert(toInsert);
+      }
+
+      await loadNotifications();
+    } finally {
+      generatingRef.current = false;
+      setGenerating(false);
     }
-
-    // Only delete the specific types we're about to re-insert, never wipe everything
-    if (toInsert.length > 0) {
-      const typesToReplace = [...new Set(toInsert.map((n: any) => n.type))];
-
-      await supabase
-        .from('notifications')
-        .delete()
-        .eq('clinic_id', clinicId)
-        .eq('read', false)
-        .in('type', typesToReplace);
-
-      await supabase.from('notifications').insert(toInsert);
-    }
-
-    await loadNotifications();
-    setGenerating(false);
   }, [clinicId, loadNotifications]);
 
   // Load on mount (silent), generate on open
@@ -206,7 +236,8 @@ export function NotificationsBell() {
     generateNotifications();
   }, [clinicId, open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Realtime subscription
+  // Realtime subscription — reloads local state whenever a row in
+  // `notifications` actually changes.
   useEffect(() => {
     if (!clinicId) return;
     const supabase = createClient();
@@ -224,6 +255,45 @@ export function NotificationsBell() {
 
     return () => { supabase.removeChannel(channel); };
   }, [clinicId, loadNotifications]);
+
+  // Realtime subscription — re-scans the source tables the moment their
+  // data actually changes, instead of waiting for the bell to be
+  // clicked. Requires Realtime to be enabled on these four tables in
+  // Supabase; the subscription is harmless but inert until then.
+  useEffect(() => {
+    if (!clinicId) return;
+    const supabase = createClient();
+    let debounce: ReturnType<typeof setTimeout>;
+
+    const triggerRegenerate = () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => generateNotifications(), 1500);
+    };
+
+    const channel = supabase
+      .channel(`notification-sources-${clinicId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items', filter: `clinic_id=eq.${clinicId}` }, triggerRegenerate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments',    filter: `clinic_id=eq.${clinicId}` }, triggerRegenerate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'billing',         filter: `clinic_id=eq.${clinicId}` }, triggerRegenerate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments',        filter: `clinic_id=eq.${clinicId}` }, triggerRegenerate)
+      .subscribe();
+
+    return () => {
+      clearTimeout(debounce);
+      supabase.removeChannel(channel);
+    };
+  }, [clinicId, generateNotifications]);
+
+  // Time-based backstop — "starting in the next hour" depends on the
+  // clock, not on data changing, so an appointment can drift into that
+  // window with nothing in the database changing at all. A 5-minute
+  // interval catches that; the realtime listener above still handles
+  // everything data-driven (stock levels, balances) instantly.
+  useEffect(() => {
+    if (!clinicId) return;
+    const interval = setInterval(() => generateNotifications(), 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [clinicId, generateNotifications]);
 
   async function markAllRead() {
     if (!clinicId) return;
@@ -285,7 +355,7 @@ export function NotificationsBell() {
       {/* Panel */}
       {open && (
         <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl
-          border border-porcelain-200 shadow-card-hover z-50 overflow-hidden animate-in">
+          border border-porcelain-200 shadow-card-hover z-50 overflow-hidden animate-settle">
 
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3.5 border-b border-porcelain-200">
