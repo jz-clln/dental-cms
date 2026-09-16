@@ -1,3 +1,19 @@
+// src/components/billing/PaymentForm.tsx
+//
+// UPDATE: swapped the plain `<Input type="date">` Payment Date field for
+// the project's own `DatePicker` (@/components/ui/DatePicker). No
+// `minDate` — same reasoning as the inventory restock date: a payment is
+// almost always logged for something that already happened (cash taken
+// yesterday, a GCash transfer received over the weekend but entered
+// today), so past dates need to stay pickable. Left fromYear/toYear at
+// DatePicker's own defaults (100 years back, up to current year) since
+// that already fits "any past date, nothing future-dated."
+//
+// parseDateString/formatDateString are the same local-Y/M/D conversion
+// used in AppointmentForm.tsx/InventoryForm.tsx (avoids the UTC-shift bug
+// from `new Date(dateStr)`/`.toISOString()`) — duplicated here rather
+// than shared, since there's no shared utils entry for it yet.
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -5,6 +21,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Patient, PaymentFormData, PaymentMethod } from '@/types';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { getPatientName, getTodayString, formatPeso } from '@/lib/utils';
 import { Search, Banknote, Smartphone, CreditCard, Check } from 'lucide-react';
@@ -16,6 +33,22 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactN
   { value: 'Maya',  label: 'Maya',  icon: <Smartphone className="w-3.5 h-3.5" /> },
   { value: 'Card',  label: 'Card',  icon: <CreditCard className="w-3.5 h-3.5" /> },
 ];
+
+// form.payment_date <-> DatePicker's Date object. Local Y/M/D only — no
+// UTC round-trip, so no off-by-one-day bug across timezones.
+function parseDateString(dateStr: string): Date | undefined {
+  if (!dateStr) return undefined;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+function formatDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 interface PaymentFormProps {
   clinicId: string;
@@ -299,12 +332,12 @@ export function PaymentForm({
           </div>
         </div>
 
-        {/* ── Payment date ── */}
-        <Input
+        {/* ── Payment date — no minDate: recording something that already
+            happened is the normal case, so past dates stay pickable ── */}
+        <DatePicker
           label="Payment Date"
-          type="date"
-          value={form.payment_date}
-          onChange={e => set('payment_date', e.target.value)}
+          value={parseDateString(form.payment_date)}
+          onChange={date => set('payment_date', date ? formatDateString(date) : '')}
         />
 
         {/* ── Actions ── */}
