@@ -47,9 +47,9 @@ function QuickActions() {
       </p>
       <div className="grid grid-cols-4 gap-1.5 sm:gap-2 w-full">
         {[
-          { href: '/patients/new',      label: 'New Patient',      icon: UserPlus,     dot: 'bg-[#386641]'   },
+          { href: '/patients/new',      label: 'New Patient',      icon: UserPlus,     dot: 'bg-[#0F766E]'   },
           { href: '/appointments/new',  label: 'New Appointment',  icon: CalendarPlus, dot: 'bg-[#ee9b00]'  },
-          { href: '/billing?action=new',    label: 'Add Billing',  icon: Receipt,      dot: 'bg-[#386641]' },
+          { href: '/billing?action=new',    label: 'Add Billing',  icon: Receipt,      dot: 'bg-[#0F766E]' },
           { href: '/inventory?action=new',  label: 'Add Supply',   icon: BoxIcon,      dot: 'bg-amber-500' },
         ].map(action => (
           <Link
