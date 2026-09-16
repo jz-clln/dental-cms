@@ -1,15 +1,44 @@
+//src\components\appointments\AppointmentForm.tsx
+//
+// UPDATE: swapped the plain `<Input type="date">` for the project's own
+// `DatePicker` (@/components/ui/DatePicker). AppointmentFormData stores
+// appointment_date as a "YYYY-MM-DD" string (matches the Supabase date
+// column and the .eq('appointment_date', ...) conflict-check query below),
+// but DatePicker works in Date objects — parseDateString/formatDateString
+// convert both ways. Built from local Y/M/D components on purpose: using
+// `new Date(dateStr)` or `.toISOString()` round-trips through UTC and
+// shifts the date by a day for anyone west of UTC.
+//
+// DatePicker has no `error` prop, so its error text is rendered manually
+// below it, same pattern as the patient-search field above it.
+//
+// DatePicker's own `toYear` default is the current year (it was built for
+// birthdates) — overridden here to current year + 2 or future
+// appointments would be unselectable.
+//
+// UPDATE: added minDate={parseDateString(getTodayString())} so the
+// calendar disables any date before today — you can't book (or reschedule
+// into) the past. Built from getTodayString() rather than `new Date()` so
+// it's midnight-local, not "right now," and stays consistent with how
+// appointment_date is generated everywhere else in this file. Note: this
+// also greys out an existing appointment's own date in the picker if that
+// appointment already happened — the stored value stays valid and still
+// submits, it just can't be re-picked from the calendar once closed and
+// reopened. Flag if past-dated edits need to stay pickable.
+
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Appointment, AppointmentFormData, Patient, Dentist } from '@/types';
-import { Input, Textarea } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { useUnsavedChanges } from '@/lib/hooks/useUnsavedChanges';
 import { TimePicker } from '@/components/ui/TimePicker';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { getTodayString, getPatientName, TREATMENT_TYPES } from '@/lib/utils';
 import { Search, AlertTriangle } from 'lucide-react';
 
@@ -37,6 +66,22 @@ interface ConflictInfo {
   dentistName: string;
   time: string;
   patientName: string;
+}
+
+// form.appointment_date <-> DatePicker's Date object. Local Y/M/D only —
+// no UTC round-trip, so no off-by-one-day bug across timezones.
+function parseDateString(dateStr: string): Date | undefined {
+  if (!dateStr) return undefined;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+function formatDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export function AppointmentForm({
@@ -296,8 +341,17 @@ export function AppointmentForm({
 
         {/* Date + Time */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="Date" type="date" value={form.appointment_date}
-            onChange={e => set('appointment_date', e.target.value)} error={errors.appointment_date} />
+          <div className="flex flex-col gap-1">
+            <DatePicker
+              label="Date"
+              value={parseDateString(form.appointment_date)}
+              onChange={date => set('appointment_date', date ? formatDateString(date) : '')}
+              minDate={parseDateString(getTodayString())}
+              fromYear={new Date().getFullYear()}
+              toYear={new Date().getFullYear() + 2}
+            />
+            {errors.appointment_date && <p className="text-xs text-red-600">{errors.appointment_date}</p>}
+          </div>
           <TimePicker
             label="Time"
             value={form.appointment_time}
