@@ -148,9 +148,15 @@ function AppointmentsContent() {
     const weekStart = mon.toISOString().split('T')[0];
     const weekEnd   = sun.toISOString().split('T')[0];
 
+    // FIX: dentist:dentists(id, first_name, last_name) — those two columns
+    // are never actually written (DentistsPanel's form only saves a single
+    // `name` field), so this join always came back null and every
+    // appointment showed "no dentist" in the calendar/list/detail views.
+    // Selecting `name` instead, to match DentistJoin (types/index.ts) and
+    // how AppointmentCard / usePrintSchedule now read it too.
     let query = supabase
       .from('appointments')
-      .select('*, patient:patients(*), dentist:dentists(id, first_name, last_name)')
+      .select('*, patient:patients(*), dentist:dentists(id, name)')
       .gte('appointment_date', weekStart)
       .lte('appointment_date', weekEnd)
       .order('appointment_date', { ascending: true })
