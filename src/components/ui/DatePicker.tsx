@@ -41,6 +41,22 @@
 // need the list to stay mounted for a beat after `open` flips false
 // (delayed unmount / AnimatePresence) rather than unmounting immediately,
 // which is a bigger change than this fix — call it out if that's wanted.
+//
+// FEATURE: added a "Today" button in the modal header, beside the X.
+// Deliberately navigates only — it moves the calendar's displayed month
+// to the current month so you're not stuck manually working the
+// month/year dropdowns to get back there, but it does NOT select today's
+// date or close the modal. This is a shared component used for birthdays
+// as well as appointment dates, and auto-selecting "today" is exactly
+// wrong for the birthday case, so navigation-only is the safe default
+// here. If a quick "set to today and close" action is what's actually
+// wanted (makes sense for appointments, not birthdays), that'd need a
+// per-usage prop rather than always-on behavior — flag it if so.
+// Needed `Calendar`'s month to go from uncontrolled (`defaultMonth`) to
+// controlled (`month` + `onMonthChange`) so an outside button can drive
+// it; a `useEffect` resets that state back to the right starting point
+// every time the modal opens, matching what `defaultMonth` used to do
+// for free by simply remounting.
 
 'use client';
 
@@ -189,6 +205,17 @@ export function DatePicker({
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
 
+  // Controlled month state — needed so the "Today" button can move the
+  // calendar's displayed month from outside it. Reset to the right
+  // starting point every time the modal opens (see effect below), same
+  // starting point `defaultMonth` used to compute.
+  const [month, setMonth] = React.useState<Date>(value ?? new Date(toYear, 0, 1));
+
+  React.useEffect(() => {
+    if (open) setMonth(value ?? new Date(toYear, 0, 1));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   function close() {
     setOpen(false);
     triggerRef.current?.focus();
@@ -262,14 +289,23 @@ export function DatePicker({
               <span className="text-sm font-semibold text-ink-700">
                 {mobileTitle || label || 'Select date'}
               </span>
-              <button
-                type="button"
-                onClick={close}
-                aria-label="Close"
-                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setMonth(new Date())}
+                  className="rounded-lg px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-50 transition-colors"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={close}
+                  aria-label="Close"
+                  className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             <div className="flex justify-center p-3">
@@ -278,9 +314,10 @@ export function DatePicker({
                 selected={value}
                 onSelect={handleSelect}
                 captionLayout="dropdown"
+                month={month}
+                onMonthChange={setMonth}
                 startMonth={new Date(fromYear, 0, 1)}
                 endMonth={new Date(toYear, 11, 31)}
-                defaultMonth={value ?? new Date(toYear, 0, 1)}
                 disabled={disabledMatcher}
                 components={{ Dropdown: CustomCalendarDropdown }}
                 className="p-2"
