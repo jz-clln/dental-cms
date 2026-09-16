@@ -165,7 +165,7 @@ export default function DashboardPage() {
           value={stats.todaysAppointments}
           sub="Scheduled for today"
           icon={Calendar}
-          iconColor="text-[#1a3d2b]"
+          iconColor="text-[#059669]"
           loading={loading}
           href="/appointments"
         />
