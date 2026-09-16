@@ -64,17 +64,21 @@ export function CustomSelect({
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      {/* Dropdown — fixed z-50 so it escapes any parent overflow */}
+      {/* Dropdown — fixed z-50 so it escapes any parent overflow.
+          FIX: this used to pop in instantly on `{open && (...)}` with no
+          transition, and the inner scroll container hardcoded
+          `scrollbarColor: '#d1d5db transparent'` inline — a plain grey
+          that silently overrode the app-wide themed gradient set in
+          global.css (inline styles beat a `*` selector regardless of
+          source order). Dropped that inline override so it inherits the
+          same scrollbar as everything else, and added `animate-in
+          origin-top` to match the fade + translateY entrance the rest of
+          the app already uses (see DatePicker.tsx's month/year listbox
+          for the same fix). */}
       {open && (
-        <div className="absolute top-full mt-1 z-50 w-full bg-white rounded-xl border
+        <div className="absolute top-full mt-1 z-50 w-full origin-top animate-in bg-white rounded-xl border
           border-gray-100 shadow-lg overflow-hidden">
-          <div
-            className="max-h-56 overflow-y-auto py-1"
-            style={{
-              scrollbarWidth: 'thin',
-              scrollbarColor: '#d1d5db transparent',
-            }}
-          >
+          <div className="max-h-56 overflow-y-auto py-1">
             {options.map(option => (
               <button
                 key={option.value}
