@@ -1,3 +1,5 @@
+//src\app\(dashboard)\appointments\page.tsx
+
 'use client';
 
 import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
