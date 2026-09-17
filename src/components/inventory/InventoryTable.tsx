@@ -53,11 +53,17 @@ function CustomDropdown({
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
+        // FIX: max-w was a fixed 120px on mobile — on narrow phones that,
+        // plus the search input's fixed width, left no room for the Low
+        // button and it wrapped to its own line. max-w and text size now
+        // scale fluidly with viewport width (clamp) instead of jumping at
+        // one breakpoint, so this shrinks just enough on any phone width
+        // to leave Low room on the same row. Unchanged at md+ (desktop).
         className="flex items-center gap-1 pl-2.5 pr-1.5 py-1.5 rounded-xl border border-gray-200
-          bg-white text-[11px] md:text-[12px] font-medium text-gray-600
+          bg-white text-[clamp(10px,2.6vw,11px)] md:text-[12px] font-medium text-gray-600
           hover:border-gray-300 transition-colors focus:outline-none
           focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400
-          whitespace-nowrap max-w-[120px] md:max-w-none"
+          whitespace-nowrap max-w-[clamp(56px,22vw,120px)] md:max-w-none"
       >
         <span className="truncate">{selected ? selected.label : placeholder}</span>
         <ChevronDown className={cn(
@@ -180,7 +186,14 @@ export function InventoryTable({
 
       {/* Toolbar */}
       <div className="flex items-center gap-2 justify-between flex-wrap md:flex-nowrap">
-        <div className="flex items-center gap-1.5 flex-wrap">
+        {/* FIX: this group had `flex-wrap`, so once Search + Category
+            didn't leave enough room, Low dropped to its own line. It's
+            now `flex-nowrap` — Low (and Clear) can never wrap away from
+            Search/Category — and Search/Category/Low/Clear all use
+            clamp()-based widths, padding, and font sizes below instead
+            of fixed px, so they shrink together just enough to actually
+            fit on any phone width rather than overflowing. */}
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap">
 
           {/* Search */}
           <div className="relative">
@@ -190,8 +203,8 @@ export function InventoryTable({
               placeholder="Search items…"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="pl-8 pr-3 py-1.5 rounded-xl border border-gray-200 text-[11px] md:text-[12px]
-                w-36 md:w-44 focus:outline-none focus:ring-2 focus:ring-teal-500/30
+              className="pl-8 pr-3 py-1.5 rounded-xl border border-gray-200 text-[clamp(10px,2.6vw,11px)] md:text-[12px]
+                w-[clamp(64px,26vw,144px)] md:w-44 focus:outline-none focus:ring-2 focus:ring-teal-500/30
                 focus:border-teal-400 hover:border-gray-300 transition-colors placeholder:text-gray-300"
             />
           </div>
@@ -208,7 +221,7 @@ export function InventoryTable({
           <button
             onClick={() => setFilterLow(v => !v)}
             className={cn(
-              'flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[11px] md:text-[12px] font-semibold transition-all',
+              'flex items-center gap-1 px-[clamp(6px,2vw,10px)] py-1.5 rounded-xl border text-[clamp(9px,2.6vw,11px)] md:text-[12px] font-semibold transition-all whitespace-nowrap flex-shrink-0',
               filterLow
                 ? 'bg-red-500 text-white border-red-500 shadow-sm shadow-red-100'
                 : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700'
@@ -221,7 +234,7 @@ export function InventoryTable({
           {hasFilters && (
             <button
               onClick={() => { setSearch(''); setFilterCategory(''); setFilterLow(false); }}
-              className="text-[11px] text-gray-400 hover:text-gray-600 px-1.5 py-1 rounded-lg hover:bg-gray-100 transition-colors"
+              className="text-[clamp(9px,2.6vw,11px)] text-gray-400 hover:text-gray-600 px-1 sm:px-1.5 py-1 rounded-lg hover:bg-gray-100 transition-colors whitespace-nowrap flex-shrink-0"
             >
               Clear
             </button>
