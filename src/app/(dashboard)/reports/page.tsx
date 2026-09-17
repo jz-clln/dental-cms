@@ -210,7 +210,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Stat Cards — same flat style as dashboard */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         {[
           {
             label: 'Revenue This Month',
@@ -243,17 +243,20 @@ export default function ReportsPage() {
             smallValue: true,
           },
         ].map(card => (
-          <div key={card.label} className="bg-gray-50 rounded-xl px-4 py-3.5 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase tracking-wide font-medium text-gray-400">
+          <div key={card.label} className="bg-gray-50 rounded-lg sm:rounded-xl px-2.5 sm:px-4 py-2.5 sm:py-3.5 flex flex-col gap-1 sm:gap-2 min-w-0">
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="text-[9px] sm:text-[11px] uppercase tracking-wide font-medium text-gray-400 truncate">
                 {card.label}
               </span>
-              <card.icon className={`w-4 h-4 ${card.iconClass}`} />
+              <card.icon className={`w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0 ${card.iconClass}`} />
             </div>
-            <p className={`font-semibold leading-tight ${card.valueClass ?? 'text-gray-900'} ${card.smallValue ? 'text-base' : 'text-2xl'}`}>
+            <p
+              className={`font-semibold leading-tight truncate tabular-nums ${card.valueClass ?? 'text-gray-900'} ${card.smallValue ? 'text-sm sm:text-base' : 'text-base sm:text-2xl'}`}
+              title={String(card.value)}
+            >
               {card.value}
             </p>
-            <p className="text-[11px] text-gray-400">{card.sub}</p>
+            <p className="text-[9px] sm:text-[11px] text-gray-400 truncate">{card.sub}</p>
           </div>
         ))}
       </div>
