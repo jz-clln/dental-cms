@@ -40,6 +40,19 @@
 // (Database → Tables → the Realtime toggle) — same switch as
 // `notifications` already has. The code has always been ready for this;
 // those four tables just weren't broadcasting changes yet.
+//
+// FIX (mobile header wrap): "30 new" and "Mark all read" had no
+// `whitespace-nowrap`, so once the header row didn't have enough width —
+// which a fixed-width panel on a phone screen easily hits — the browser
+// broke each phrase across two lines ("30" / "new", "Mark all" / "read")
+// instead of keeping it on one. Added `whitespace-nowrap` to both (the
+// actual fix), gave the title `min-w-0` + `truncate` so IT yields space
+// first if things ever get genuinely tight instead of the action
+// controls breaking, wrapped the right-hand controls in `flex-shrink-0`
+// so they're never the thing that gives, and switched the title/badge/
+// button text to `clamp()` sizes so they scale down smoothly on narrow
+// phones rather than staying pinned at their widest (desktop-equivalent)
+// size the whole time. Nothing outside the header block changed.
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -358,27 +371,27 @@ export function NotificationsBell() {
           border border-porcelain-200 shadow-card-hover z-50 overflow-hidden animate-settle">
 
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3.5 border-b border-porcelain-200">
-            <div className="flex items-center gap-2">
-              <h3 className="font-display tracking-display text-ink-900">Notifications</h3>
+          <div className="flex items-center justify-between gap-2 px-4 py-3.5 border-b border-porcelain-200">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h3 className="font-display tracking-display text-ink-900 text-[clamp(13px,3.6vw,16px)] truncate">Notifications</h3>
               {unreadCount > 0 && (
-                <span className="text-xs bg-red-100 text-red-600 font-semibold px-2 py-0.5 rounded-full">
+                <span className="text-[clamp(9px,2.6vw,11px)] bg-red-100 text-red-600 font-semibold px-1.5 sm:px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
                   {unreadCount} new
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-shrink-0">
               {unreadCount > 0 && (
                 <button
                   onClick={markAllRead}
-                  className="flex items-center gap-1 text-xs text-teal-700 hover:underline font-medium px-2 py-1 rounded-lg hover:bg-teal-50 transition-colors active:animate-press"
+                  className="flex items-center gap-1 text-[clamp(9px,2.6vw,11px)] text-teal-700 hover:underline font-medium px-1.5 sm:px-2 py-1 rounded-lg hover:bg-teal-50 transition-colors active:animate-press whitespace-nowrap"
                 >
-                  <CheckCheck className="w-3.5 h-3.5" /> Mark all read
+                  <CheckCheck className="w-3.5 h-3.5 flex-shrink-0" /> Mark all read
                 </button>
               )}
               <button
                 onClick={() => setOpen(false)}
-                className="p-1 rounded-lg text-gray-400 hover:bg-porcelain-100 transition-colors active:animate-press"
+                className="p-1 rounded-lg text-gray-400 hover:bg-porcelain-100 transition-colors active:animate-press flex-shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
