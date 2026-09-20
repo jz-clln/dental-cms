@@ -18,6 +18,13 @@
 // TrialBanner and TrialCountdown) but nothing on this page pointed to
 // it. Same reasoning as REVISION 2 — a plain link in a card, not a 7th
 // tab, matching the existing Privacy card's link style exactly.
+//
+// REVISION 4: compact desktop sizing. Base classes are the phone sizing and
+// are unchanged; md: classes shrink the tab bar, card titles, body text and
+// spacing to the app's desktop scale (13px body, 12px secondary, 11px small
+// labels), matching the patients table and the Plans & Billing page. The
+// desktop container is also capped at max-w-4xl so it lines up with the
+// Plans & Billing page (it used to widen to max-w-5xl on xl screens).
 
 'use client';
 
@@ -40,6 +47,13 @@ import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useVerification } from '@/lib/hooks/useVerification';
 import { Building2, Users, Stethoscope, Lock, ShieldCheck, FileText, LogOut, Cookie } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// ------------------------------------------------------------
+// Shared sizing (base = phone, md: = compact desktop)
+// ------------------------------------------------------------
+
+const CARD_TITLE = 'font-semibold md:text-[15px]';
+const CARD_TEXT = 'text-sm text-gray-500 md:text-[13px]';
 
 // ------------------------------------------------------------
 // Tabs
@@ -166,13 +180,13 @@ export default function SettingsPage() {
   }
 
   return (
-    // Mobile/tablet: unchanged (max-w-2xl — viewport is already narrower than this, so no visual change).
-    // Desktop (lg+): container widens so the 6-tab bar fits on one line without triggering
-    // the internal horizontal scrollbar, using up the empty space beside it instead.
-    <div className="max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-5">
+    // Mobile/tablet: max-w-2xl (viewport is already narrower than this, so no visual change).
+    // Desktop (lg+): max-w-4xl, the same width as the Plans & Billing page, so the compact
+    // 6-tab bar fits on one line without the internal horizontal scrollbar.
+    <div className="max-w-2xl lg:max-w-4xl mx-auto space-y-5 md:space-y-4">
 
       {/* Tabs */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-1.5 flex gap-1 overflow-x-auto">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-1.5 md:p-1 flex gap-1 overflow-x-auto">
         {BASE_TABS.map(tab => {
           const active = activeTab === tab.id;
           return (
@@ -181,12 +195,13 @@ export default function SettingsPage() {
               onClick={() => setActiveTab(tab.id)}
               className={cn(
                 'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all flex-1 justify-center whitespace-nowrap relative',
+                'md:gap-1.5 md:px-3 md:py-2 md:text-[13px]',
                 active
                   ? 'bg-teal-700 text-white'
                   : 'text-gray-500 hover:bg-gray-100'
               )}
             >
-              <tab.icon className="w-4 h-4" />
+              <tab.icon className="w-4 h-4 md:w-3.5 md:h-3.5" />
               {tab.id === 'verify' ? (
                 <VerifyTabLabel
                   status={verification?.verification_status}
@@ -220,9 +235,9 @@ export default function SettingsPage() {
         <>
           {/* ── Clinic Info ── */}
           {activeTab === 'clinic' && clinic && clinicId && (
-            <div className="space-y-4">
+            <div className="space-y-4 md:space-y-3">
               <Card>
-                <CardHeader><h3 className="font-semibold">Clinic Logo</h3></CardHeader>
+                <CardHeader><h3 className={CARD_TITLE}>Clinic Logo</h3></CardHeader>
                 <CardBody>
                   <LogoUpload
                     clinicId={clinicId}
@@ -234,15 +249,15 @@ export default function SettingsPage() {
                 </CardBody>
               </Card>
               <Card>
-                <CardHeader><h3 className="font-semibold">Clinic Information</h3></CardHeader>
+                <CardHeader><h3 className={CARD_TITLE}>Clinic Information</h3></CardHeader>
                 <CardBody>
                   <ClinicInfoForm clinic={clinic} onSuccess={setClinic} toast={toast} />
                 </CardBody>
               </Card>
               <Card>
-                <CardHeader><h3 className="font-semibold">Plans & Billing</h3></CardHeader>
+                <CardHeader><h3 className={CARD_TITLE}>Plans & Billing</h3></CardHeader>
                 <CardBody>
-                  <p className="text-sm text-gray-500">
+                  <p className={CARD_TEXT}>
                     View your current plan, trial status, and upgrade options on the{' '}
                     <Link href="/settings/billing" className="text-teal-700 underline hover:text-teal-800">
                       Plans & Billing page
@@ -251,7 +266,7 @@ export default function SettingsPage() {
                 </CardBody>
               </Card>
               <Card>
-                <CardHeader><h3 className="font-semibold">Help</h3></CardHeader>
+                <CardHeader><h3 className={CARD_TITLE}>Help</h3></CardHeader>
                 <CardBody className="space-y-3">
                   <ReplayTutorialButton />
                 </CardBody>
@@ -263,7 +278,7 @@ export default function SettingsPage() {
           {/* ── Dentists ── */}
           {activeTab === 'dentists' && clinicId && (
             <Card>
-              <CardHeader><h3 className="font-semibold">Dentists</h3></CardHeader>
+              <CardHeader><h3 className={CARD_TITLE}>Dentists</h3></CardHeader>
               <CardBody>
                 <DentistsPanel
                   dentists={dentists}
@@ -278,7 +293,7 @@ export default function SettingsPage() {
           {/* ── Staff ── */}
           {activeTab === 'staff' && clinicId && currentStaff && (
             <Card>
-              <CardHeader><h3 className="font-semibold">Staff</h3></CardHeader>
+              <CardHeader><h3 className={CARD_TITLE}>Staff</h3></CardHeader>
               <CardBody>
                 <StaffPanel
                   staff={staff}
@@ -294,7 +309,7 @@ export default function SettingsPage() {
           {/* ── Password ── */}
           {activeTab === 'password' && (
             <Card>
-              <CardHeader><h3 className="font-semibold">Change Password</h3></CardHeader>
+              <CardHeader><h3 className={CARD_TITLE}>Change Password</h3></CardHeader>
               <CardBody>
                 <ChangePasswordForm toast={toast} />
               </CardBody>
@@ -306,10 +321,11 @@ export default function SettingsPage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Clinic Verification</h3>
+                  <h3 className={CARD_TITLE}>Clinic Verification</h3>
                   {verification && (
                     <span className={cn(
                       'text-xs font-semibold px-2.5 py-1 rounded-full',
+                      'md:text-[11px] md:px-2 md:py-0.5',
                       verification.verification_status === 'verified'  && 'bg-teal-100 text-teal-700',
                       verification.verification_status === 'pending'   && 'bg-amber-100 text-amber-700',
                       verification.verification_status === 'rejected'  && 'bg-red-100 text-red-600',
@@ -335,11 +351,11 @@ export default function SettingsPage() {
           {activeTab === 'privacy' && (
             <Card>
               <CardHeader>
-                <h3 className="font-semibold">Privacy Notice</h3>
+                <h3 className={CARD_TITLE}>Privacy Notice</h3>
               </CardHeader>
               <CardBody className="space-y-3">
-                <p className="flex items-center gap-1.5 text-sm text-gray-500">
-                  <ShieldCheck className="w-4 h-4 text-teal-700 flex-shrink-0" />
+                <p className={cn('flex items-center gap-1.5', CARD_TEXT)}>
+                  <ShieldCheck className="w-4 h-4 md:w-3.5 md:h-3.5 text-teal-700 flex-shrink-0" />
                   <span>
                     View our full privacy notice on{' '}
                     <a
@@ -351,8 +367,8 @@ export default function SettingsPage() {
                   </span>
                 </p>
 
-                <p className="flex items-center gap-1.5 text-sm text-gray-500">
-                  <Cookie className="w-4 h-4 text-teal-700 flex-shrink-0" />
+                <p className={cn('flex items-center gap-1.5', CARD_TEXT)}>
+                  <Cookie className="w-4 h-4 md:w-3.5 md:h-3.5 text-teal-700 flex-shrink-0" />
                   <span>
                     See what cookies we use on the{' '}
                     <a
