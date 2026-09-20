@@ -53,6 +53,33 @@
 // button text to `clamp()` sizes so they scale down smoothly on narrow
 // phones rather than staying pinned at their widest (desktop-equivalent)
 // size the whole time. Nothing outside the header block changed.
+//
+// FIX (everything says "Just now" / list not live): generateNotifications()
+// deleted every unread notification of a type and re-inserted the whole
+// set on every scan. So every scan gave every alert a brand-new
+// `created_at` (hence "Just now" on all of them), read rows were left
+// behind while a fresh unread duplicate was inserted next to them, and
+// the delete + insert burst fired dozens of realtime events that each
+// reloaded the list. It also skipped the delete entirely when nothing
+// needed inserting, so alerts for problems that were already fixed never
+// went away.
+//
+// Each alert now has a stable `dedupe_key` (low_stock:<item id>,
+// appointment:<appointment id>, balance:<patient id>) with a unique
+// constraint on (clinic_id, dedupe_key). A scan only:
+//   - inserts alerts that don't exist yet — created_at is when the
+//     problem first appeared and is never touched again,
+//   - refreshes the body of existing ones (stock count / balance moved)
+//     without resetting their read state,
+//   - deletes alerts whose condition no longer holds, read or not, so the
+//     same problem coming back later raises a genuinely new alert.
+// Needs the `dedupe_key` column + unique constraint on `notifications`.
+//
+// Also: one scan on mount so alerts show without opening the bell; the
+// full-panel spinner only shows when there is nothing to display yet, so
+// background scans no longer blank the list; realtime bursts on
+// `notifications` are coalesced into one reload; and a 30s tick while the
+// panel is open lets "Just now" age into "1m ago" on its own.
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -71,6 +98,16 @@ interface Notification {
   created_at: string;
 }
 
+interface NotificationDraft {
+  clinic_id: string;
+  dedupe_key: string;
+  title: string;
+  body: string;
+  type: Notification['type'];
+  read: boolean;
+  href: string;
+}
+
 const TYPE_CONFIG = {
   low_stock:   { icon: Package,      bg: 'bg-red-100',    color: 'text-red-600',    label: 'Inventory' },
   appointment: { icon: Calendar,     bg: 'bg-blue-100',   color: 'text-blue-600',   label: 'Appointment' },
@@ -84,6 +121,7 @@ export function NotificationsBell() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [clinicId, setClinicId] = useState<string | null>(null);
+  const [, setTick] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
   const generatingRef = useRef(false);
 
@@ -99,6 +137,13 @@ export function NotificationsBell() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  // Re-render every 30s while open so relative times keep aging
+  useEffect(() => {
+    if (!open) return;
+    const interval = setInterval(() => setTick(v => v + 1), 30_000);
+    return () => clearInterval(interval);
+  }, [open]);
 
   // Get clinic ID once on mount
   useEffect(() => {
@@ -128,7 +173,8 @@ export function NotificationsBell() {
     setLoading(false);
   }, [clinicId]);
 
-  // Generate fresh notifications by scanning DB
+  // Sync the notifications table with what the source tables say right now.
+  // Only touches rows whose state actually changed — see FIX note above.
   const generateNotifications = useCallback(async () => {
     if (!clinicId || generatingRef.current) return;
     generatingRef.current = true;
@@ -144,8 +190,8 @@ export function NotificationsBell() {
       const timeNow = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
       const timeHour = `${inOneHour.getHours().toString().padStart(2, '0')}:${inOneHour.getMinutes().toString().padStart(2, '0')}`;
 
-      const [inventoryRes, appointmentsRes, billRes, payRes, patientsRes] = await Promise.all([
-        supabase.from('inventory_items').select('item_name, quantity, reorder_level').eq('clinic_id', clinicId),
+      const [inventoryRes, appointmentsRes, billRes, payRes, patientsRes, existingRes] = await Promise.all([
+        supabase.from('inventory_items').select('id, item_name, quantity, reorder_level').eq('clinic_id', clinicId),
         supabase.from('appointments')
           .select('*, patient:patients(first_name, last_name)')
           .eq('clinic_id', clinicId)
@@ -156,21 +202,32 @@ export function NotificationsBell() {
         supabase.from('billing').select('patient_id, amount_charged').eq('clinic_id', clinicId),
         supabase.from('payments').select('patient_id, amount_paid').eq('clinic_id', clinicId),
         supabase.from('patients').select('id, first_name, last_name').eq('clinic_id', clinicId).eq('archived', false),
+        supabase.from('notifications').select('id, dedupe_key, body').eq('clinic_id', clinicId).not('dedupe_key', 'is', null),
       ]);
 
-      const toInsert: Omit<Notification, 'id' | 'created_at'>[] = [];
+      // A failed read comes back as data: null, which would look like
+      // "nothing is wrong anymore" and wipe every alert below.
+      const failed = [inventoryRes, appointmentsRes, billRes, payRes, patientsRes, existingRes].find(r => r.error);
+      if (failed) {
+        console.error('generateNotifications: scan failed', failed.error);
+        return;
+      }
+
+      const desired = new Map<string, NotificationDraft>();
+      const add = (n: NotificationDraft) => desired.set(n.dedupe_key, n);
 
       // 1. Low stock alerts
       for (const item of inventoryRes.data ?? []) {
         if (item.quantity <= item.reorder_level) {
-          toInsert.push({
+          add({
             clinic_id: clinicId,
+            dedupe_key: `low_stock:${item.id}`,
             title: 'Low Stock Alert',
             body: `${item.item_name} is running low (${item.quantity} remaining, reorder at ${item.reorder_level}).`,
             type: 'low_stock',
             read: false,
             href: '/inventory',
-          } as any);
+          });
         }
       }
 
@@ -179,14 +236,15 @@ export function NotificationsBell() {
         const patientName = appt.patient
           ? `${appt.patient.first_name} ${appt.patient.last_name}`
           : 'A patient';
-        toInsert.push({
+        add({
           clinic_id: clinicId,
+          dedupe_key: `appointment:${appt.id}`,
           title: 'Upcoming Appointment',
           body: `${patientName} has a ${appt.treatment_type} appointment starting soon.`,
           type: 'appointment',
           read: false,
           href: `/appointments?id=${appt.id}`,
-        } as any);
+        });
       }
 
       // 3. Overdue balances (balance > 0)
@@ -206,29 +264,48 @@ export function NotificationsBell() {
         if (balance > 0) {
           const patient = patients.find(p => p.id === patientId);
           if (!patient) continue;
-          toInsert.push({
+          add({
             clinic_id: clinicId,
+            dedupe_key: `balance:${patientId}`,
             title: 'Outstanding Balance',
             body: `${patient.first_name} ${patient.last_name} has an unpaid balance of ${formatPeso(balance)}.`,
             type: 'balance',
             read: false,
             href: `/billing`,
-          } as any);
+          });
         }
       }
 
-      // Only delete the specific types we're about to re-insert, never wipe everything
-      if (toInsert.length > 0) {
-        const typesToReplace = [...new Set(toInsert.map((n: any) => n.type))];
+      // Diff against what's already stored
+      const existingRows = (existingRes.data ?? []) as { id: string; dedupe_key: string; body: string }[];
+      const existing = new Map(existingRows.map(r => [r.dedupe_key, r]));
+      const drafts = Array.from(desired.values());
 
-        await supabase
+      const toCreate = drafts.filter(d => !existing.has(d.dedupe_key));
+      const toRefresh = drafts.filter(d => {
+        const row = existing.get(d.dedupe_key);
+        return row && row.body !== d.body;
+      });
+      const staleIds = existingRows.filter(r => !desired.has(r.dedupe_key)).map(r => r.id);
+
+      // ignoreDuplicates keeps this safe if two tabs/users scan at once —
+      // the unique constraint makes the loser a no-op instead of an error.
+      if (toCreate.length > 0) {
+        const { error } = await supabase
           .from('notifications')
-          .delete()
-          .eq('clinic_id', clinicId)
-          .eq('read', false)
-          .in('type', typesToReplace);
+          .upsert(toCreate, { onConflict: 'clinic_id,dedupe_key', ignoreDuplicates: true });
+        if (error) console.error('generateNotifications: insert failed', error);
+      }
 
-        await supabase.from('notifications').insert(toInsert);
+      if (toRefresh.length > 0) {
+        await Promise.all(toRefresh.map(d =>
+          supabase.from('notifications').update({ body: d.body })
+            .eq('clinic_id', clinicId).eq('dedupe_key', d.dedupe_key)
+        ));
+      }
+
+      if (staleIds.length > 0) {
+        await supabase.from('notifications').delete().in('id', staleIds);
       }
 
       await loadNotifications();
@@ -238,11 +315,13 @@ export function NotificationsBell() {
     }
   }, [clinicId, loadNotifications]);
 
-  // Load on mount (silent), generate on open
+  // Load on mount, then scan once so existing alerts show up without
+  // waiting for a click or the 5-minute interval.
   useEffect(() => {
     if (!clinicId) return;
     loadNotifications();
-  }, [clinicId, loadNotifications]);
+    generateNotifications();
+  }, [clinicId, loadNotifications, generateNotifications]);
 
   useEffect(() => {
     if (!clinicId || !open) return;
@@ -250,10 +329,13 @@ export function NotificationsBell() {
   }, [clinicId, open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Realtime subscription — reloads local state whenever a row in
-  // `notifications` actually changes.
+  // `notifications` actually changes. Debounced so a batch of inserts
+  // triggers one reload, not one per row.
   useEffect(() => {
     if (!clinicId) return;
     const supabase = createClient();
+    let debounce: ReturnType<typeof setTimeout>;
+
     const channel = supabase
       .channel(`notifications-${clinicId}`)
       .on('postgres_changes', {
@@ -262,11 +344,15 @@ export function NotificationsBell() {
         table: 'notifications',
         filter: `clinic_id=eq.${clinicId}`,
       }, () => {
-        loadNotifications();
+        clearTimeout(debounce);
+        debounce = setTimeout(() => loadNotifications(), 300);
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      clearTimeout(debounce);
+      supabase.removeChannel(channel);
+    };
   }, [clinicId, loadNotifications]);
 
   // Realtime subscription — re-scans the source tables the moment their
@@ -400,7 +486,7 @@ export function NotificationsBell() {
 
           {/* Body */}
           <div className="max-h-[420px] overflow-y-auto">
-            {loading || generating ? (
+            {(loading || generating) && notifications.length === 0 ? (
               <div className="flex items-center justify-center gap-2 py-10 text-gray-400 text-sm">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 {generating ? 'Checking for alerts…' : 'Loading…'}
