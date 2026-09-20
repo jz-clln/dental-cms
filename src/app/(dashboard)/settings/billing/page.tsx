@@ -10,6 +10,13 @@ import { SegmentedToggle } from '@/components/ui/SegmentedToggle';
 import { PlanCard } from '@/components/settings/PlanCard';
 import { PRICING_PLANS, type BillingCycle, type Currency, type PricingPlan } from '@/lib/pricingPlans';
 
+/*
+ * Sizing rule for this page:
+ *  - Base classes = phone sizing (larger tap targets, bigger title)
+ *  - md: classes  = compact desktop sizing, in line with the app's table scale
+ *                   (13px body, 12px secondary, 11px small labels)
+ */
+
 type TrialStatus = ReturnType<typeof useTrialStatus>;
 type StatusPanelProps = Pick<TrialStatus, 'state' | 'daysLeft' | 'patientCount' | 'patientLimit'>;
 
@@ -22,8 +29,8 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
   const fill = pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-ink-900';
 
   return (
-    <div className="w-full sm:w-64">
-      <div className="mb-2 flex items-baseline justify-between text-sm">
+    <div className="w-full sm:w-64 md:w-56">
+      <div className="mb-2 flex items-baseline justify-between text-sm md:mb-1.5 md:text-xs">
         <span className="text-gray-500">Patients used</span>
         <span className="font-medium tabular-nums text-ink-900">
           {used} <span className="font-normal text-gray-400">/ {limit}</span>
@@ -35,7 +42,7 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
         aria-valuemin={0}
         aria-valuemax={limit}
         aria-valuenow={used}
-        className="h-2 w-full overflow-hidden rounded-full bg-gray-100"
+        className="h-2 w-full overflow-hidden rounded-full bg-gray-100 md:h-1.5"
       >
         <div
           className={`h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none ${fill}`}
@@ -47,7 +54,7 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Status panel — the one prominent element on the page                */
+/* Status panel                                                        */
 /* ------------------------------------------------------------------ */
 
 function StatusPanel({ state, daysLeft, patientCount, patientLimit }: StatusPanelProps) {
@@ -81,17 +88,17 @@ function StatusPanel({ state, daysLeft, patientCount, patientLimit }: StatusPane
   return (
     <section
       aria-label="Subscription status"
-      className="flex flex-col gap-5 rounded-2xl border border-porcelain-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6"
+      className="flex flex-col gap-5 rounded-2xl border border-porcelain-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between md:gap-4 md:px-4 md:py-3.5"
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-4 md:items-center md:gap-3">
         <span
-          className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${content.tone}`}
+          className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full md:h-8 md:w-8 ${content.tone}`}
         >
-          <Icon className="h-5 w-5" aria-hidden="true" />
+          <Icon className="h-5 w-5 md:h-4 md:w-4" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="text-base font-semibold text-ink-900 sm:text-lg">{content.title}</p>
-          <p className="mt-0.5 text-sm text-gray-500">{content.body}</p>
+          <p className="text-base font-semibold text-ink-900 md:text-sm">{content.title}</p>
+          <p className="mt-0.5 text-sm text-gray-500 md:text-xs">{content.body}</p>
         </div>
       </div>
 
@@ -104,16 +111,16 @@ function StatusPanelSkeleton() {
   return (
     <div
       aria-hidden="true"
-      className="flex animate-pulse flex-col gap-5 rounded-2xl border border-porcelain-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"
+      className="flex animate-pulse flex-col gap-5 rounded-2xl border border-porcelain-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between md:gap-4 md:px-4 md:py-3.5"
     >
-      <div className="flex items-center gap-4">
-        <div className="h-10 w-10 rounded-full bg-gray-100" />
+      <div className="flex items-center gap-4 md:gap-3">
+        <div className="h-10 w-10 rounded-full bg-gray-100 md:h-8 md:w-8" />
         <div className="space-y-2">
           <div className="h-4 w-44 rounded bg-gray-100" />
           <div className="h-3 w-32 rounded bg-gray-100" />
         </div>
       </div>
-      <div className="h-8 w-full rounded bg-gray-100 sm:w-64" />
+      <div className="h-8 w-full rounded bg-gray-100 sm:w-64 md:w-56" />
     </div>
   );
 }
@@ -135,25 +142,21 @@ export default function BillingPage() {
     toast.info(`${plan?.name ?? 'Plan'} selected — payment isn't connected yet.`);
   }
 
-  // Full class strings so Tailwind can detect them at build time.
-  const gridCols =
-    PRICING_PLANS.length >= 3 ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2';
-
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 pb-[max(2rem,env(safe-area-inset-bottom))] sm:space-y-8">
+    <div className="mx-auto w-full max-w-4xl space-y-6 pb-[max(2rem,env(safe-area-inset-bottom))] md:space-y-5">
       {/* Header */}
       <header>
         <Link
           href="/settings"
-          className="-ml-2 inline-flex min-h-[44px] touch-manipulation items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-gray-500 transition-colors hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-900/20"
+          className="-ml-2 inline-flex min-h-[44px] touch-manipulation items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-gray-500 transition-colors hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-900/20 md:mb-2 md:ml-0 md:min-h-0 md:px-0 md:text-[13px] md:font-normal"
         >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          <ArrowLeft className="h-4 w-4 md:h-3.5 md:w-3.5" aria-hidden="true" />
           Settings
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink-900 md:mt-0 md:text-base md:tracking-normal">
           Plans &amp; Billing
         </h1>
-        <p className="mt-1.5 text-sm text-gray-500 sm:text-base">
+        <p className="mt-1.5 text-sm text-gray-500 md:mt-0.5 md:text-[13px]">
           Compare plans and choose what fits.
         </p>
       </header>
@@ -170,8 +173,11 @@ export default function BillingPage() {
         />
       )}
 
-      {/* Toggles */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/*
+        Toggles. The md:[&_button] classes shrink the SegmentedToggle buttons on
+        desktop from here, without needing to edit that component.
+      */}
+      <div className="flex flex-wrap items-center justify-between gap-3 md:[&_button]:px-3 md:[&_button]:py-1 md:[&_button]:text-[12px]">
         <SegmentedToggle
           ariaLabel="Billing cycle"
           value={cycle}
@@ -193,7 +199,7 @@ export default function BillingPage() {
       </div>
 
       {/* Plan cards */}
-      <div className={`grid grid-cols-1 gap-4 lg:gap-6 ${gridCols}`}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {PRICING_PLANS.map(plan => (
           <PlanCard
             key={plan.id}
@@ -207,15 +213,15 @@ export default function BillingPage() {
 
       {/* Bitey note — hides entirely (no empty gap) until /public/bitey/proud.png exists */}
       {showBitey && (
-        <aside className="flex items-center gap-4 rounded-2xl border border-porcelain-200 bg-white p-4 sm:p-5">
+        <aside className="flex items-center gap-4 rounded-2xl border border-porcelain-200 bg-white p-4 md:gap-3 md:px-4 md:py-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/bitey/proud.png"
             alt=""
-            className="h-14 w-14 flex-shrink-0 object-contain sm:h-16 sm:w-16"
+            className="h-14 w-14 flex-shrink-0 object-contain md:h-11 md:w-11"
             onError={() => setShowBitey(false)}
           />
-          <p className="text-sm leading-relaxed text-gray-600">
+          <p className="text-sm leading-relaxed text-gray-600 md:text-[13px] md:leading-5">
             Upgrade anytime with confidence. All your data, patients, and records will carry over
             automatically.
           </p>
