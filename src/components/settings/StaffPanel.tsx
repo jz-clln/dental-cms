@@ -1,11 +1,15 @@
+//src\components\settings\StaffPanel.tsx
+
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Staff } from '@/types';
 import { Input, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
-import { Trash2, Plus, ShieldCheck, UserCircle } from 'lucide-react';
+import { UsageLimitBar } from '@/components/settings/UsageLimitBar';
+import { Trash2, Plus, ShieldCheck, UserCircle, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createStaffMember, deleteStaffMember } from '@/app/actions/staffActions';
 
@@ -66,9 +70,13 @@ function AddStaffForm({ clinicId, onSuccess, onCancel, toast }: AddStaffFormProp
     });
 
     if (result.error) {
+      // Server-side cap check returns a specific message — surface it
+      // as-is instead of the generic fallback.
       toast.error(
         result.error.includes('already registered')
           ? 'That email is already in use.'
+          : result.error.includes('limit reached')
+          ? result.error
           : 'Failed to add staff member. Please try again.'
       );
     } else {
@@ -130,14 +138,17 @@ interface StaffPanelProps {
   staff: Staff[];
   currentStaffId: string;
   clinicId: string;
+  limit: number;
   onRefresh: () => void;
   toast: { success: (m: string) => void; error: (m: string) => void };
 }
 
-export function StaffPanel({ staff, currentStaffId, clinicId, onRefresh, toast }: StaffPanelProps) {
+export function StaffPanel({ staff, currentStaffId, clinicId, limit, onRefresh, toast }: StaffPanelProps) {
   const [showAdd, setShowAdd] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Staff | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const atCap = staff.length >= limit;
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -157,7 +168,9 @@ export function StaffPanel({ staff, currentStaffId, clinicId, onRefresh, toast }
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <UsageLimitBar label="Staff accounts" current={staff.length} limit={limit} />
+
       {staff.length === 0 ? (
         <p className="text-sm text-gray-400 text-center py-6">No staff members yet.</p>
       ) : (
@@ -214,9 +227,18 @@ export function StaffPanel({ staff, currentStaffId, clinicId, onRefresh, toast }
         </div>
       )}
 
-      <Button size="sm" variant="secondary" onClick={() => setShowAdd(true)}>
-        <Plus className="w-4 h-4" /> Add Staff Member
-      </Button>
+      {atCap ? (
+        <Link
+          href="/settings/billing"
+          className="inline-flex items-center gap-2 text-sm font-medium text-teal-700 hover:text-teal-800"
+        >
+          <Lock className="w-4 h-4" /> Upgrade to add more staff
+        </Link>
+      ) : (
+        <Button size="sm" variant="secondary" onClick={() => setShowAdd(true)}>
+          <Plus className="w-4 h-4" /> Add Staff Member
+        </Button>
+      )}
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Staff Member" size="md">
         <AddStaffForm
