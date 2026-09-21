@@ -40,6 +40,15 @@ const EMPTY_FORM: PatientFormData = {
   email: '',
 };
 
+// Surface the DB trigger's own message ("Patient limit reached (40)...")
+// instead of a generic failure — this is the backstop for when the
+// client-side cap check in useTrialStatus was stale or bypassed.
+function describeInsertError(message: string): string {
+  return message.includes('limit reached')
+    ? message
+    : 'Failed to add patient. Please try again.';
+}
+
 export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: PatientFormProps) {
   const router = useRouter();
   const [loading, setLoading]     = useState(false);
@@ -57,12 +66,10 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
 
   const [errors, setErrors] = useState<FormErrors>({});
 
-  // Consent — only required for new patients, pre-filled for existing
   const [consentGiven, setConsentGiven] = useState<boolean>(
     (existing as any)?.consent_given ?? false
   );
 
-  // Dirty check
   const initial = existing
     ? {
         first_name:     existing.first_name,
@@ -98,7 +105,6 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       newErrors.email = 'Enter a valid email address.';
     }
-    // Consent required only for new patients
     if (!existing && !consentGiven) {
       newErrors.consent = 'Patient consent is required before adding a record.';
     }
@@ -122,7 +128,6 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
       address:        form.address.trim() || null,
       contact_number: form.contact_number.trim() || null,
       email:          form.email.trim()   || null,
-      // Always write consent on new patients; preserve existing on edit
       ...(!existing && {
         consent_given:    true,
         consent_given_at: now,
@@ -153,7 +158,7 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
         .single();
 
       if (error) {
-        toast.error('Failed to add patient. Please try again.');
+        toast.error(describeInsertError(error.message));
         setLoading(false);
         return;
       }
@@ -262,7 +267,6 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
               </span>
             </label>
 
-            {/* Consent confirmation row */}
             {consentGiven && (
               <div className="flex items-center gap-1.5 mt-2.5 ml-7 text-xs text-teal-700 font-medium">
                 <ShieldCheck className="w-3.5 h-3.5" />
@@ -270,7 +274,6 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
               </div>
             )}
 
-            {/* Error */}
             {errors.consent && (
               <p className="mt-2 ml-7 text-xs text-red-500">{errors.consent}</p>
             )}
