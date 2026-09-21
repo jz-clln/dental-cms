@@ -1,12 +1,16 @@
+//src\components\settings\DentistsPanel.tsx
+
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Dentist } from '@/types';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
-import { Pencil, Trash2, Plus, User } from 'lucide-react';
+import { UsageLimitBar } from '@/components/settings/UsageLimitBar';
+import { Pencil, Trash2, Plus, User, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -78,7 +82,18 @@ function DentistForm({ clinicId, existing, onSuccess, onCancel, toast }: Dentist
       toast.success('Dentist updated.');
     } else {
       const { error } = await supabase.from('dentists').insert(payload);
-      if (error) { toast.error('Failed to add dentist.'); setLoading(false); return; }
+      if (error) {
+        // Surface the DB trigger's own message ("Dentist limit reached
+        // (1)...") instead of a generic failure — this is the backstop
+        // for when the client-side cap check was stale or bypassed.
+        toast.error(
+          error.message.includes('limit reached')
+            ? error.message
+            : 'Failed to add dentist.'
+        );
+        setLoading(false);
+        return;
+      }
       toast.success(`Dr. ${form.name} added.`);
     }
 
@@ -141,15 +156,18 @@ function DentistForm({ clinicId, existing, onSuccess, onCancel, toast }: Dentist
 interface DentistsPanelProps {
   dentists: Dentist[];
   clinicId: string;
+  limit: number;
   onRefresh: () => void;
   toast: { success: (m: string) => void; error: (m: string) => void };
 }
 
-export function DentistsPanel({ dentists, clinicId, onRefresh, toast }: DentistsPanelProps) {
+export function DentistsPanel({ dentists, clinicId, limit, onRefresh, toast }: DentistsPanelProps) {
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<Dentist | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Dentist | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const atCap = dentists.length >= limit;
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -167,7 +185,9 @@ export function DentistsPanel({ dentists, clinicId, onRefresh, toast }: Dentists
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <UsageLimitBar label="Dentists" current={dentists.length} limit={limit} />
+
       {/* List */}
       {dentists.length === 0 ? (
         <p className="text-sm text-gray-400 text-center py-6">No dentists added yet.</p>
@@ -208,9 +228,18 @@ export function DentistsPanel({ dentists, clinicId, onRefresh, toast }: Dentists
         </div>
       )}
 
-      <Button size="sm" variant="secondary" onClick={() => setShowAdd(true)}>
-        <Plus className="w-4 h-4" /> Add Dentist
-      </Button>
+      {atCap ? (
+        <Link
+          href="/settings/billing"
+          className="inline-flex items-center gap-2 text-sm font-medium text-teal-700 hover:text-teal-800"
+        >
+          <Lock className="w-4 h-4" /> Upgrade to add more dentists
+        </Link>
+      ) : (
+        <Button size="sm" variant="secondary" onClick={() => setShowAdd(true)}>
+          <Plus className="w-4 h-4" /> Add Dentist
+        </Button>
+      )}
 
       {/* Add Modal */}
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Dentist" size="md">
