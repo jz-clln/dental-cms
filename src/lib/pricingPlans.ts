@@ -49,8 +49,8 @@ export const PRICING_PLANS: PricingPlan[] = [
       'Basic reports',
     ],
     prices: {
-      PHP: { monthly: 349, annual: 2999, annualMonthlyEquivalent: 250, annualSavingsPercent: 28 },
-      USD: { monthly: 7.99, annual: 68.99, annualMonthlyEquivalent: 5.75, annualSavingsPercent: 28 },
+      PHP: { monthly: 499, annual: 4299, annualMonthlyEquivalent: 358, annualSavingsPercent: 28 },
+      USD: { monthly: 11.99, annual: 103.59, annualMonthlyEquivalent: 8.63, annualSavingsPercent: 28 },
     },
   },
   {
@@ -67,8 +67,8 @@ export const PRICING_PLANS: PricingPlan[] = [
       'Priority support',
     ],
     prices: {
-      PHP: { monthly: 499, annual: 4499, annualMonthlyEquivalent: 375, annualSavingsPercent: 25 },
-      USD: { monthly: 10.99, annual: 94.99, annualMonthlyEquivalent: 7.92, annualSavingsPercent: 25 },
+      PHP: { monthly: 849, annual: 7599, annualMonthlyEquivalent: 633, annualSavingsPercent: 25 },
+      USD: { monthly: 18.99, annual: 170.91, annualMonthlyEquivalent: 14.24, annualSavingsPercent: 25 },
     },
   },
 ];
