@@ -1,30 +1,8 @@
 // src/app/(dashboard)/settings/page.tsx
 //
-// REVISION: added a mobile-only Log Out entry. The mobile hamburger/drawer
-// in Sidebar.tsx (which used to hold Log Out) was removed in favor of a
-// full bottom nav, so this page is now where phone users sign out. Desktop
-// is untouched — it still has Log Out in the sidebar, so this button is
-// hidden at md: and up.
-//
-// REVISION 2: the "Privacy" tab card now also links to /cookie-policy,
-// alongside the existing /privacy link. Added here rather than as a new
-// tab — a 7th tab would risk breaking the one-line tab bar this page was
-// specifically tuned for (see the max-w-* comment below). Terms isn't
-// linked from this card either; only the Cookie Policy link was added,
-// per what was actually asked for.
-//
-// REVISION 3: added a "Plans & Billing" card to the Clinic Info tab,
-// linking to /settings/billing. That route already existed (linked from
-// TrialBanner and TrialCountdown) but nothing on this page pointed to
-// it. Same reasoning as REVISION 2 — a plain link in a card, not a 7th
-// tab, matching the existing Privacy card's link style exactly.
-//
-// REVISION 4: compact desktop sizing. Base classes are the phone sizing and
-// are unchanged; md: classes shrink the tab bar, card titles, body text and
-// spacing to the app's desktop scale (13px body, 12px secondary, 11px small
-// labels), matching the patients table and the Plans & Billing page. The
-// desktop container is also capped at max-w-4xl so it lines up with the
-// Plans & Billing page (it used to widen to max-w-5xl on xl screens).
+// REVISION 5: DentistsPanel and StaffPanel now receive a `limit` prop
+// sourced from useTrialStatus() — this is the cap-enforcement UX wiring.
+// Everything else on this page is unchanged from REVISION 4.
 
 'use client';
 
@@ -45,6 +23,7 @@ import { ReplayTutorialButton } from '@/components/tutorial/ReplayTutorialButton
 import { useAppToast } from '@/app/(dashboard)/layout';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useVerification } from '@/lib/hooks/useVerification';
+import { useTrialStatus } from '@/lib/hooks/useTrialStatus';
 import { Building2, Users, Stethoscope, Lock, ShieldCheck, FileText, LogOut, Cookie } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -61,7 +40,6 @@ const CARD_TEXT = 'text-sm text-gray-500 md:text-[13px]';
 
 type Tab = 'clinic' | 'dentists' | 'staff' | 'password' | 'verify' | 'privacy';
 
-// Base tabs — verify tab label/icon is dynamic based on status
 const BASE_TABS = [
   { id: 'clinic',    label: 'Clinic Info', icon: Building2  },
   { id: 'dentists',  label: 'Dentists',    icon: Stethoscope },
@@ -70,10 +48,6 @@ const BASE_TABS = [
   { id: 'verify',    label: 'Verify',      icon: ShieldCheck },
   { id: 'privacy',   label: 'Privacy',     icon: FileText    },
 ] as const;
-
-// ------------------------------------------------------------
-// Verify tab badge — small dot indicator for unverified/rejected
-// ------------------------------------------------------------
 
 function VerifyTabLabel({
   status,
@@ -114,8 +88,8 @@ export default function SettingsPage() {
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
   const [clinicId, setClinicId]       = useState<string | null>(null);
 
-  // Verification status — used only for the tab dot indicator
   const { verification } = useVerification(clinicId);
+  const { limits } = useTrialStatus();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -167,7 +141,6 @@ export default function SettingsPage() {
     router.push('/login');
   };
 
-  // 🔴 ERROR STATE
   if (error) {
     return (
       <div className="max-w-2xl mx-auto p-6 text-center">
@@ -180,9 +153,6 @@ export default function SettingsPage() {
   }
 
   return (
-    // Mobile/tablet: max-w-2xl (viewport is already narrower than this, so no visual change).
-    // Desktop (lg+): max-w-4xl, the same width as the Plans & Billing page, so the compact
-    // 6-tab bar fits on one line without the internal horizontal scrollbar.
     <div className="max-w-2xl lg:max-w-4xl mx-auto space-y-5 md:space-y-4">
 
       {/* Tabs */}
@@ -215,9 +185,6 @@ export default function SettingsPage() {
         })}
       </div>
 
-      {/* Log Out — mobile only. The mobile drawer that used to hold this
-          was removed in favor of a full bottom nav, so this is now the
-          phone entry point for signing out. Desktop keeps its sidebar button. */}
       <button
         onClick={handleLogout}
         className="md:hidden w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl
@@ -228,7 +195,6 @@ export default function SettingsPage() {
         Log Out
       </button>
 
-      {/* Loading */}
       {loading ? (
         <SkeletonCard />
       ) : (
@@ -283,6 +249,7 @@ export default function SettingsPage() {
                 <DentistsPanel
                   dentists={dentists}
                   clinicId={clinicId}
+                  limit={limits.dentists}
                   onRefresh={load}
                   toast={toast}
                 />
@@ -299,6 +266,7 @@ export default function SettingsPage() {
                   staff={staff}
                   currentStaffId={currentStaff.id}
                   clinicId={clinicId}
+                  limit={limits.staff}
                   onRefresh={load}
                   toast={toast}
                 />
