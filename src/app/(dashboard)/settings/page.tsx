@@ -2,7 +2,10 @@
 //
 // REVISION 5: DentistsPanel and StaffPanel now receive a `limit` prop
 // sourced from useTrialStatus() — this is the cap-enforcement UX wiring.
-// Everything else on this page is unchanged from REVISION 4.
+//
+// REVISION 6: added the Patient Booking QR card to the Clinic Info tab,
+// right after Plans & Billing. Renders/downloads the clinic's QR code for
+// the public self-booking page (src/app/book/[clinicId]).
 
 'use client';
 
@@ -19,6 +22,7 @@ import { ChangePasswordForm } from '@/components/settings/ChangePasswordForm';
 import { DataBackupNotice } from '@/components/settings/DataBackupNotice';
 import { LogoUpload } from '@/components/settings/LogoUpload';
 import { VerifyClinicPanel } from '@/components/settings/VerifyClinicPanel';
+import { BookingQrCard } from '@/components/settings/BookingQrCard';
 import { ReplayTutorialButton } from '@/components/tutorial/ReplayTutorialButton';
 import { useAppToast } from '@/app/(dashboard)/layout';
 import { SkeletonCard } from '@/components/ui/Skeleton';
@@ -231,6 +235,9 @@ export default function SettingsPage() {
                   </p>
                 </CardBody>
               </Card>
+
+              <BookingQrCard clinicId={clinicId} clinicName={clinic.name} />
+
               <Card>
                 <CardHeader><h3 className={CARD_TITLE}>Help</h3></CardHeader>
                 <CardBody className="space-y-3">
