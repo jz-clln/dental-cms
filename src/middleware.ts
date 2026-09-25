@@ -32,7 +32,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { signStaffSession, verifyStaffSession, STAFF_SESSION_COOKIE } from '@/lib/session-cookie';
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/verify', '/onboarding', '/api/auth/callback', '/reset-password', '/forgot-password', '/privacy', '/terms', '/cookie-policy', '/book'];
+const PUBLIC_ROUTES = ['/login', '/signup', '/verify', '/onboarding', '/api/auth/callback', '/reset-password', '/forgot-password', '/privacy', '/terms', '/cookie-policy', '/book', '/api/booking/submit'];
 
 export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
