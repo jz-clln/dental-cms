@@ -19,13 +19,14 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { TimePicker } from '@/components/ui/TimePicker';
-import { getTodayString, TREATMENT_TYPES } from '@/lib/utils';
+import { TREATMENT_TYPES } from '@/lib/utils';
+import { getBookingToday, isFutureBooking } from '@/lib/booking-time';
 import { ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DentistJoin, PublicBookingFormData } from '@/types';
@@ -79,6 +80,26 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const today = getBookingToday(now);
+
+  useEffect(() => {
+    const refresh = () => setNow(Date.now());
+    const timer = setInterval(refresh, 1000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
+
+  useEffect(() => {
+    setForm(prev => {
+      if (!prev.requested_date || !prev.requested_time ||
+          isFutureBooking(prev.requested_date, prev.requested_time, now)) return prev;
+      return { ...prev, requested_time: '' };
+    });
+  }, [now, form.requested_date, form.requested_time]);
 
   function set<K extends keyof PublicBookingFormData>(field: K, value: PublicBookingFormData[K]) {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -100,6 +121,13 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
     if (!form.treatment_type) e.treatment_type = 'Please select a treatment.';
     if (!form.requested_date) e.requested_date = 'Please pick a date.';
     if (!form.requested_time) e.requested_time = 'Please pick a time.';
+    if (form.requested_date && form.requested_date < getBookingToday()) {
+      e.requested_date = 'Please choose today or a future date.';
+    }
+    if (form.requested_date && form.requested_time &&
+        !isFutureBooking(form.requested_date, form.requested_time)) {
+      e.requested_time = 'Please choose a future date and time.';
+    }
     if (!consentGiven) e.consent = 'Please confirm before submitting.';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -217,16 +245,20 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
             label="Preferred Date"
             value={parseDateString(form.requested_date)}
             onChange={date => set('requested_date', date ? formatDateString(date) : '')}
-            minDate={parseDateString(getTodayString())}
-            fromYear={new Date().getFullYear()}
-            toYear={new Date().getFullYear() + 1}
+            minDate={parseDateString(today)}
+            fromYear={Number(today.slice(0, 4))}
+            toYear={Number(today.slice(0, 4)) + 1}
           />
           {errors.requested_date && <p className="text-xs text-red-600">{errors.requested_date}</p>}
         </div>
         <TimePicker
           label="Preferred Time"
           value={form.requested_time}
-          onChange={(val: string) => set('requested_time', val)}
+          onChange={(val: string) => {
+            if (isFutureBooking(form.requested_date, val)) set('requested_time', val);
+            else setNow(Date.now());
+          }}
+          isTimeDisabled={time => !isFutureBooking(form.requested_date, time, now)}
           error={errors.requested_time}
         />
       </div>
