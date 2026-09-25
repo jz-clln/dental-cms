@@ -74,7 +74,10 @@ function formatDateString(date: Date): string {
 }
 
 export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps) {
-  const [form, setForm] = useState<PublicBookingFormData>(EMPTY_FORM);
+  const [form, setForm] = useState<PublicBookingFormData>(() => ({
+    ...EMPTY_FORM,
+    requested_date: getBookingToday(),
+  }));
   const [errors, setErrors] = useState<FormErrors>({});
   const [consentGiven, setConsentGiven] = useState(false);
   const [loading, setLoading] = useState(false);
