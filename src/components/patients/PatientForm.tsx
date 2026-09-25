@@ -1,7 +1,18 @@
 'use client';
+//
+// UPDATE: added a duplicate-patient check for new patients. While typing
+// the contact number, a debounced call to match_patient_by_phone (see
+// 002_patient_phone_dedup.sql) checks for an existing patient in this
+// clinic with the same number, matched on the last 10 digits so
+// formatting differences ("0917…" vs "+63 917…") still catch the match.
+// This is a WARNING, not a hard block — two patients can legitimately
+// share a household/parent's phone — so staff can still proceed, but now
+// see a link to the existing record first instead of finding out later
+// from a duplicate in search results.
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Patient, PatientFormData } from '@/types';
 import { Input, Textarea } from '@/components/ui/Input';
@@ -9,7 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { useUnsavedChanges } from '@/lib/hooks/useUnsavedChanges';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PatientFormProps {
@@ -29,6 +40,12 @@ interface FormErrors {
   contact_number?: string;
   email?: string;
   consent?: string;
+}
+
+interface DuplicateMatch {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
 }
 
 const EMPTY_FORM: PatientFormData = {
@@ -69,6 +86,33 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
   const [consentGiven, setConsentGiven] = useState<boolean>(
     (existing as any)?.consent_given ?? false
   );
+
+  // ── Duplicate-phone check (new patients only) ───────────────────────
+  const [duplicateMatch, setDuplicateMatch] = useState<DuplicateMatch | null>(null);
+  const duplicateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (existing) return; // only warn when creating a new patient
+    const digits = form.contact_number.replace(/[^0-9]/g, '');
+
+    if (duplicateTimerRef.current) clearTimeout(duplicateTimerRef.current);
+
+    if (digits.length < 7) {
+      setDuplicateMatch(null);
+      return;
+    }
+
+    duplicateTimerRef.current = setTimeout(async () => {
+      const supabase = createClient();
+      const { data } = await supabase.rpc('match_patient_by_phone', {
+        p_clinic_id: clinicId,
+        p_phone: form.contact_number,
+      });
+      setDuplicateMatch((data?.[0] as DuplicateMatch) ?? null);
+    }, 400);
+
+    return () => { if (duplicateTimerRef.current) clearTimeout(duplicateTimerRef.current); };
+  }, [form.contact_number, clinicId, existing]);
 
   const initial = existing
     ? {
@@ -212,13 +256,35 @@ export function PatientForm({ clinicId, existing, onSuccess, onCancel, toast }: 
             onChange={date => set('birthday', date ? date.toLocaleDateString('en-CA') : '')}
             maxDate={new Date()}
           />
-          <Input
-            label="Contact Number"
-            placeholder="09171234567"
-            value={form.contact_number}
-            onChange={e => set('contact_number', e.target.value)}
-            error={errors.contact_number}
-          />
+          <div className="flex flex-col gap-1">
+            <Input
+              label="Contact Number"
+              placeholder="09171234567"
+              value={form.contact_number}
+              onChange={e => set('contact_number', e.target.value)}
+              error={errors.contact_number}
+            />
+            {!existing && duplicateMatch && (
+              <div className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2 mt-1">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                <span>
+                  Possible duplicate:{' '}
+                  <strong>
+                    {duplicateMatch.first_name} {duplicateMatch.last_name}
+                  </strong>{' '}
+                  already uses this number.{' '}
+                  <Link
+                    href={`/patients/${duplicateMatch.id}`}
+                    target="_blank"
+                    className="underline hover:text-amber-900"
+                  >
+                    View record
+                  </Link>{' '}
+                  · you can still continue if this is a different person.
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Email */}
