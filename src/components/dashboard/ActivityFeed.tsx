@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import { ActivityItem } from '@/types';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { getRelativeTime } from '@/lib/utils';
@@ -21,6 +24,18 @@ interface ActivityFeedProps {
 }
 
 export function ActivityFeed({ items, loading }: ActivityFeedProps) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (loading || items.length === 0) return;
+    const tick = () => setTick(value => value + 1);
+    const timer = setInterval(tick, 30_000);
+    window.addEventListener('focus', tick);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', tick);
+    };
+  }, [loading, items.length]);
+
   if (loading) return <SkeletonTable rows={4} />;
 
   if (items.length === 0) {
