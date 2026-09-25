@@ -12,7 +12,7 @@
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PublicBookingForm } from '@/components/booking/PublicBookingForm';
-import type { DentistJoin } from '@/types';
+import type { Dentist } from '@/types';
 
 interface PageProps {
   params: Promise<{ clinicId: string }>;
@@ -27,7 +27,7 @@ export default async function PublicBookingPage({ params }: PageProps) {
     supabase.from('clinics').select('id, name').eq('id', clinicId).maybeSingle(),
     supabase
       .from('dentists')
-      .select('id, name')
+      .select('id, name, schedule_days')
       .eq('clinic_id', clinicId)
       .order('name'),
   ]);
@@ -47,22 +47,11 @@ export default async function PublicBookingPage({ params }: PageProps) {
         </div>
 
         <div className="bg-white rounded-2xl border border-porcelain-200 shadow-sm p-5 sm:p-6">
-          <h1 className="text-lg font-semibold text-ink-900">Book an appointment</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Fill this in and our front desk will confirm your slot shortly.
-          </p>
-
-          <div className="mt-6">
-            <PublicBookingForm
-              clinicId={clinicRes.data.id}
-              dentists={(dentistsRes.data ?? []) as DentistJoin[]}
-            />
-          </div>
+          <PublicBookingForm
+            clinicId={clinicRes.data.id}
+            dentists={(dentistsRes.data ?? []) as Pick<Dentist, 'id' | 'name' | 'schedule_days'>[]}
+          />
         </div>
-
-        <p className="mt-4 text-center text-xs text-gray-400">
-          This isn't a confirmed appointment yet — the clinic will reach out to confirm.
-        </p>
       </div>
     </div>
   );
