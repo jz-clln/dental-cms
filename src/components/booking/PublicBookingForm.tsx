@@ -85,12 +85,34 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submittedBooking, setSubmittedBooking] = useState<PublicBookingFormData | null>(null);
+  const [reviewBooking, setReviewBooking] = useState<PublicBookingFormData | null>(null);
+  const reviewRef = useRef<HTMLDialogElement>(null);
+  const reviewButtonRef = useRef<HTMLButtonElement>(null);
+  const sendingRef = useRef(false);
   const successRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
   const today = getBookingToday(now);
   const noTimesToday = form.requested_date === today && !isFutureBooking(today, '23:30', now);
   const availableDentists = dentists.filter(d => isBookingDentistAvailable(d.schedule_days, form.requested_date));
   const noDentistsAvailable = !!form.requested_date && availableDentists.length === 0;
+
+  useEffect(() => {
+    const dialog = reviewRef.current;
+    if (!reviewBooking || !dialog) return;
+    dialog.showModal();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      dialog.close();
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [reviewBooking]);
+
+  function closeReview() {
+    if (sendingRef.current) return;
+    setReviewBooking(null);
+    reviewButtonRef.current?.focus();
+  }
 
   useEffect(() => {
     setForm(prev => {
@@ -162,10 +184,25 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
     return Object.keys(e).length === 0;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (sendingRef.current || reviewBooking) return;
     setSubmitError(null);
     if (!validate()) return;
+    setReviewBooking({ ...form });
+  }
+
+  async function confirmBooking() {
+    if (sendingRef.current || !reviewBooking) return;
+    setSubmitError(null);
+    // The date/time may have expired while the review dialog was open.
+    if (!validate() || JSON.stringify(form) !== JSON.stringify(reviewBooking)) {
+      setSubmitError('Your booking details need updating. Please check the form and review again.');
+      closeReview();
+      return;
+    }
+    const booking = { ...reviewBooking };
+    sendingRef.current = true;
     setLoading(true);
 
     try {
@@ -174,7 +211,7 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clinic_id: clinicId,
-          ...form,
+          ...booking,
           consent_given: true,
         }),
       });
@@ -184,11 +221,13 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
         throw new Error(body?.error ?? 'Something went wrong. Please try again.');
       }
 
-      setSubmittedBooking({ ...form });
+      setSubmittedBooking(booking);
+      setReviewBooking(null);
       setSubmitted(true);
     } catch (err: any) {
       setSubmitError(err.message ?? 'Something went wrong. Please try again.');
     } finally {
+      sendingRef.current = false;
       setLoading(false);
     }
   }
@@ -378,7 +417,7 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
         {errors.consent && <p role="alert" className="mt-2 text-sm text-red-600">{errors.consent}</p>}
       </div>
 
-      {submitError && (
+      {submitError && !reviewBooking && (
         <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
           {submitError}
         </p>
@@ -386,10 +425,52 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
 
       <div className="space-y-3">
         <p className="text-sm leading-relaxed text-gray-600">Your appointment is confirmed only after the clinic contacts you.</p>
-        <Button type="submit" loading={loading} disabled={noDentistsAvailable} className="w-full min-h-12 text-base">
-          {loading ? 'Sending request…' : 'Send appointment request'}
+        <Button ref={reviewButtonRef} type="submit" disabled={noDentistsAvailable || loading} className="w-full min-h-12 text-base">
+          Review appointment request
         </Button>
       </div>
+      {reviewBooking && (
+        <dialog
+          ref={reviewRef}
+          aria-labelledby="booking-review-title"
+          aria-describedby="booking-review-description"
+          aria-busy={loading}
+          onCancel={event => { event.preventDefault(); closeReview(); }}
+          className="m-auto w-[calc(100%-2rem)] max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-5 shadow-xl backdrop:bg-black/40 sm:p-6"
+        >
+          <h2 id="booking-review-title" className="text-lg font-semibold text-ink-900">Are these details correct?</h2>
+          <p id="booking-review-description" className="mt-2 text-sm leading-relaxed text-gray-600">
+            Please double-check your contact number so the clinic can reach you.
+          </p>
+          <dl className="my-5 space-y-3 text-sm">
+            {[
+              ['Name', `${reviewBooking.first_name} ${reviewBooking.last_name}`],
+              ['Contact number', reviewBooking.contact_number],
+              ['Email', reviewBooking.email || 'Not provided'],
+              ['Treatment or service', reviewBooking.treatment_type],
+              ['Preferred date', formatDate(reviewBooking.requested_date)],
+              ['Preferred time', `${formatTime(reviewBooking.requested_time)} (Philippine time)`],
+              ['Dentist preference', dentists.find(d => d.id === reviewBooking.dentist_id)?.name || 'Any available dentist'],
+              ['Notes for the clinic', reviewBooking.notes || 'None'],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-gray-500">{label}</dt>
+                <dd className="mt-0.5 whitespace-pre-wrap break-words font-medium text-ink-900">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          {submitError && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{submitError}</p>}
+          <p className="mb-4 text-sm text-gray-600">Your appointment is confirmed only after the clinic contacts you.</p>
+          <div className="flex flex-col gap-3">
+            <Button type="button" variant="secondary" disabled={loading} onClick={closeReview} className="min-h-12 w-full text-base">
+              Go back and edit
+            </Button>
+            <Button type="button" loading={loading} onClick={confirmBooking} className="min-h-12 w-full text-base">
+              {loading ? 'Sending request…' : 'Confirm and send'}
+            </Button>
+          </div>
+        </dialog>
+      )}
     </form>
   );
 }
