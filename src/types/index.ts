@@ -137,6 +137,49 @@ export interface PatientBillingSummary {
 }
 
 // ============================================================
+// QR SELF-BOOKING TYPES
+// ============================================================
+
+export type BookingRequestStatus = 'pending' | 'approved' | 'declined';
+
+export interface BookingRequest {
+  id: string;
+  clinic_id: string;
+  first_name: string;
+  last_name: string;
+  contact_number: string;
+  email: string | null;
+  treatment_type: string;
+  requested_date: string;
+  requested_time: string;
+  dentist_id: string | null;
+  notes: string | null;
+  consent_given: boolean;
+  consent_given_at: string | null;
+  status: BookingRequestStatus;
+  matched_patient_id: string | null;
+  created_appointment_id: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  // Joined field — matches the actual SELECT (id, name), same pattern as
+  // Appointment.dentist above
+  dentist?: DentistJoin;
+}
+
+export interface PublicBookingFormData {
+  first_name: string;
+  last_name: string;
+  contact_number: string;
+  email: string;
+  treatment_type: string;
+  requested_date: string;
+  requested_time: string;
+  dentist_id: string; // '' = no preference
+  notes: string;
+}
+
+// ============================================================
 // FORM TYPES
 // ============================================================
 

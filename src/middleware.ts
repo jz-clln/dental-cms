@@ -20,11 +20,19 @@
 // seeing the page. This also fixes the cookie-notice banner's "Learn
 // more" link on the login/signup screens, since those visitors are by
 // definition not authenticated yet.
+//
+// UPDATE 3: added /book (the QR self-booking page, src/app/book/[clinicId])
+// to PUBLIC_ROUTES. Patients scanning the clinic's printed QR code are by
+// definition not logged in — without this they'd be redirected to /login
+// same as UPDATE 2's legal pages. /book itself doesn't touch Supabase
+// through this middleware's client at all; the page and its submit route
+// use the service-role admin client instead (src/lib/supabase/admin.ts),
+// so no RLS/auth state is needed for this route either way.
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { signStaffSession, verifyStaffSession, STAFF_SESSION_COOKIE } from '@/lib/session-cookie';
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/verify', '/onboarding', '/api/auth/callback', '/reset-password', '/forgot-password', '/privacy', '/terms', '/cookie-policy'];
+const PUBLIC_ROUTES = ['/login', '/signup', '/verify', '/onboarding', '/api/auth/callback', '/reset-password', '/forgot-password', '/privacy', '/terms', '/cookie-policy', '/book'];
 
 export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
