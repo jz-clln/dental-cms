@@ -86,7 +86,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Bell, Package, Calendar, AlertCircle, Check, CheckCheck, X, Loader2 } from 'lucide-react';
-import { cn, formatPeso } from '@/lib/utils';
+import { cn, formatPeso, formatDateShort, formatTime } from '@/lib/utils';
 
 interface Notification {
   id: string;
@@ -124,6 +124,8 @@ export function NotificationsBell() {
   const [, setTick] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
   const generatingRef = useRef(false);
+  const regeneratePendingRef = useRef(false);
+  const [scanVersion, setScanVersion] = useState(0);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -176,7 +178,11 @@ export function NotificationsBell() {
   // Sync the notifications table with what the source tables say right now.
   // Only touches rows whose state actually changed — see FIX note above.
   const generateNotifications = useCallback(async () => {
-    if (!clinicId || generatingRef.current) return;
+    if (!clinicId) return;
+    if (generatingRef.current) {
+      regeneratePendingRef.current = true;
+      return;
+    }
     generatingRef.current = true;
     setGenerating(true);
 
@@ -190,7 +196,7 @@ export function NotificationsBell() {
       const timeNow = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
       const timeHour = `${inOneHour.getHours().toString().padStart(2, '0')}:${inOneHour.getMinutes().toString().padStart(2, '0')}`;
 
-      const [inventoryRes, appointmentsRes, billRes, payRes, patientsRes, existingRes] = await Promise.all([
+      const [inventoryRes, appointmentsRes, billRes, payRes, patientsRes, existingRes, bookingsRes] = await Promise.all([
         supabase.from('inventory_items').select('id, item_name, quantity, reorder_level').eq('clinic_id', clinicId),
         supabase.from('appointments')
           .select('*, patient:patients(first_name, last_name)')
@@ -203,11 +209,15 @@ export function NotificationsBell() {
         supabase.from('payments').select('patient_id, amount_paid').eq('clinic_id', clinicId),
         supabase.from('patients').select('id, first_name, last_name').eq('clinic_id', clinicId).eq('archived', false),
         supabase.from('notifications').select('id, dedupe_key, body').eq('clinic_id', clinicId).not('dedupe_key', 'is', null),
+        supabase.from('booking_requests')
+          .select('id, first_name, last_name, treatment_type, requested_date, requested_time')
+          .eq('clinic_id', clinicId)
+          .eq('status', 'pending'),
       ]);
 
       // A failed read comes back as data: null, which would look like
       // "nothing is wrong anymore" and wipe every alert below.
-      const failed = [inventoryRes, appointmentsRes, billRes, payRes, patientsRes, existingRes].find(r => r.error);
+      const failed = [inventoryRes, appointmentsRes, billRes, payRes, patientsRes, existingRes, bookingsRes].find(r => r.error);
       if (failed) {
         console.error('generateNotifications: scan failed', failed.error);
         return;
@@ -276,6 +286,19 @@ export function NotificationsBell() {
         }
       }
 
+      // Pending QR bookings use the existing appointment notification category.
+      for (const request of bookingsRes.data ?? []) {
+        add({
+          clinic_id: clinicId,
+          dedupe_key: `booking_request:${request.id}`,
+          title: 'New Booking Request',
+          body: `${request.first_name} ${request.last_name} requested ${request.treatment_type} on ${formatDateShort(request.requested_date)} at ${formatTime(request.requested_time)}.`,
+          type: 'appointment',
+          read: false,
+          href: '/appointments?view=requests',
+        });
+      }
+
       // Diff against what's already stored
       const existingRows = (existingRes.data ?? []) as { id: string; dedupe_key: string; body: string }[];
       const existing = new Map(existingRows.map(r => [r.dedupe_key, r]));
@@ -312,6 +335,10 @@ export function NotificationsBell() {
     } finally {
       generatingRef.current = false;
       setGenerating(false);
+      if (regeneratePendingRef.current) {
+        regeneratePendingRef.current = false;
+        setScanVersion(version => version + 1);
+      }
     }
   }, [clinicId, loadNotifications]);
 
@@ -321,7 +348,7 @@ export function NotificationsBell() {
     if (!clinicId) return;
     loadNotifications();
     generateNotifications();
-  }, [clinicId, loadNotifications, generateNotifications]);
+  }, [clinicId, loadNotifications, generateNotifications, scanVersion]);
 
   useEffect(() => {
     if (!clinicId || !open) return;
@@ -357,7 +384,7 @@ export function NotificationsBell() {
 
   // Realtime subscription — re-scans the source tables the moment their
   // data actually changes, instead of waiting for the bell to be
-  // clicked. Requires Realtime to be enabled on these four tables in
+  // clicked. Requires Realtime to be enabled on these source tables in
   // Supabase; the subscription is harmless but inert until then.
   useEffect(() => {
     if (!clinicId) return;
@@ -371,11 +398,12 @@ export function NotificationsBell() {
 
     const channel = supabase
       .channel(`notification-sources-${clinicId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'booking_requests', filter: `clinic_id=eq.${clinicId}` }, triggerRegenerate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items', filter: `clinic_id=eq.${clinicId}` }, triggerRegenerate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments',    filter: `clinic_id=eq.${clinicId}` }, triggerRegenerate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'billing',         filter: `clinic_id=eq.${clinicId}` }, triggerRegenerate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payments',        filter: `clinic_id=eq.${clinicId}` }, triggerRegenerate)
-      .subscribe();
+      .subscribe(status => { if (status === 'SUBSCRIBED') triggerRegenerate(); });
 
     return () => {
       clearTimeout(debounce);
