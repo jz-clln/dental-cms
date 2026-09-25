@@ -13,6 +13,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { TREATMENT_TYPES } from '@/lib/utils';
+import { getBookingTimestamp } from '@/lib/booking-time';
 
 const PHONE_RE = /^[0-9+\-\s()]{7,15}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -61,11 +62,15 @@ export async function POST(request: NextRequest) {
   if (typeof requested_date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(requested_date)) {
     return NextResponse.json({ error: 'Pick a valid date.' }, { status: 400 });
   }
-  if (requested_date < new Date().toLocaleDateString('en-CA')) {
-    return NextResponse.json({ error: "That date has already passed." }, { status: 400 });
-  }
   if (typeof requested_time !== 'string' || !/^\d{2}:\d{2}$/.test(requested_time)) {
     return NextResponse.json({ error: 'Pick a valid time.' }, { status: 400 });
+  }
+  const bookingTimestamp = getBookingTimestamp(requested_date, requested_time);
+  if (!Number.isFinite(bookingTimestamp)) {
+    return NextResponse.json({ error: 'Pick a valid date and time.' }, { status: 400 });
+  }
+  if (bookingTimestamp <= Date.now()) {
+    return NextResponse.json({ error: 'Please choose a future date and time.' }, { status: 400 });
   }
   if (dentist_id && typeof dentist_id !== 'string') {
     return NextResponse.json({ error: 'Invalid dentist.' }, { status: 400 });
@@ -101,6 +106,10 @@ export async function POST(request: NextRequest) {
   }
 
   const now = new Date().toISOString();
+
+  if (bookingTimestamp <= Date.now()) {
+    return NextResponse.json({ error: 'Please choose a future date and time.' }, { status: 400 });
+  }
 
   const { error } = await supabase.from('booking_requests').insert({
     clinic_id,
