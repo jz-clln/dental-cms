@@ -16,3 +16,11 @@ export function getBookingTimestamp(date: string, time: string): number {
 export function isFutureBooking(date: string, time: string, now = Date.now()): boolean {
   return getBookingTimestamp(date, time) > now;
 }
+
+export function isBookingDentistAvailable(scheduleDays: string[] | null, date: string): boolean {
+  if (!Number.isFinite(getBookingTimestamp(date, '00:00'))) return false;
+  const weekday = new Date(`${date}T00:00:00+08:00`).toLocaleDateString('en-US', {
+    timeZone: 'Asia/Manila', weekday: 'long',
+  });
+  return !scheduleDays?.length || scheduleDays.includes(weekday);
+}
