@@ -10,6 +10,7 @@ interface TimePickerProps {
   label?: string;
   error?: string;
   placeholder?: string;
+  isTimeDisabled?: (time: string) => boolean;
 }
 
 function generateSlots() {
@@ -31,6 +32,7 @@ const AM_SLOTS = SLOTS.filter(s => s.period === 'AM');
 const PM_SLOTS = SLOTS.filter(s => s.period === 'PM');
 
 export function TimePicker({
+  isTimeDisabled,
   value, onChange, label, error, placeholder = 'Select time…',
 }: TimePickerProps) {
   const [open, setOpen] = useState(false);
@@ -106,8 +108,10 @@ export function TimePicker({
                 <button
                   key={slot.value}
                   type="button"
+                  disabled={isTimeDisabled?.(slot.value)}
                   onClick={() => { onChange(slot.value); setOpen(false); }}
                   className={cn(
+                    isTimeDisabled?.(slot.value) && 'opacity-40 cursor-not-allowed pointer-events-none',
                     'w-full text-center px-2 py-2 text-sm transition-colors',
                     value === slot.value
                       ? 'bg-teal-700 text-white font-medium'
@@ -125,8 +129,10 @@ export function TimePicker({
                 <button
                   key={slot.value}
                   type="button"
+                  disabled={isTimeDisabled?.(slot.value)}
                   onClick={() => { onChange(slot.value); setOpen(false); }}
                   className={cn(
+                    isTimeDisabled?.(slot.value) && 'opacity-40 cursor-not-allowed pointer-events-none',
                     'w-full text-center px-2 py-2 text-sm transition-colors',
                     value === slot.value
                       ? 'bg-teal-700 text-white font-medium'
