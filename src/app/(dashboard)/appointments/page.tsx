@@ -13,7 +13,7 @@
 'use client';
 
 import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Appointment, Dentist, AppointmentStatus } from '@/types';
@@ -178,6 +178,7 @@ function isSameWeek(a: Date, b: Date): boolean {
 function AppointmentsContent() {
   const toast = useAppToast();
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [dentists, setDentists]         = useState<Dentist[]>([]);
@@ -186,7 +187,13 @@ function AppointmentsContent() {
   const [staffId, setStaffId]           = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<Date>(new Date());
 
-  const [view, setView] = useState<'calendar' | 'requests'>('calendar');
+  const view = searchParams.get('view') === 'requests' ? 'requests' : 'calendar';
+  function setView(nextView: 'calendar' | 'requests') {
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextView === 'requests') params.set('view', 'requests');
+    else params.delete('view');
+    router.replace(`/appointments${params.size ? `?${params.toString()}` : ''}`, { scroll: false });
+  }
   const [pendingCount, setPendingCount] = useState(0);
 
   const { mon, sun } = useMemo(() => getWeekBounds(selectedWeek), [selectedWeek]);
@@ -262,7 +269,17 @@ function AppointmentsContent() {
     if (!clinicId) return;
     loadPendingCount();
     const interval = setInterval(loadPendingCount, PENDING_POLL_MS);
-    return () => clearInterval(interval);
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`booking-count-${clinicId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'booking_requests', filter: `clinic_id=eq.${clinicId}`,
+      }, () => { loadPendingCount(); })
+      .subscribe(status => { if (status === 'SUBSCRIBED') loadPendingCount(); });
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, [clinicId, loadPendingCount]);
 
   useEffect(() => {
