@@ -62,6 +62,17 @@ export function BookingRequestsPanel({ clinicId, staffId, toast, onApproved }: B
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`booking-requests-${clinicId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'booking_requests', filter: `clinic_id=eq.${clinicId}`,
+      }, () => { load(); })
+      .subscribe(status => { if (status === 'SUBSCRIBED') load(); });
+    return () => { supabase.removeChannel(channel); };
+  }, [clinicId, load]);
+
   async function handleApprove(req: BookingRequest) {
     setActingOn(req.id);
     const supabase = createClient();
