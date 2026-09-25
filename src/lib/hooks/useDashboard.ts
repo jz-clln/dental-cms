@@ -48,6 +48,7 @@ export function useDashboard(clinicId: string | null): UseDashboardResult {
   const [initialLoaded, setInitialLoaded] = useState(false);
 
   const loadingRef    = useRef(false);
+  const pendingRefreshRef = useRef(false);
   const lastFocusLoad = useRef(0);
   const abortRef      = useRef<AbortController | null>(null);
 
@@ -69,10 +70,14 @@ export function useDashboard(clinicId: string | null): UseDashboardResult {
     setBitey(deriveBiteyState(next.stats, next.appointments, isNewUser));
   }, []);
 
-  const loadDashboard = useCallback(async (silent = false) => {
-    if (!clinicId || loadingRef.current) return;
+  const loadDashboard = useCallback(async (silent = false, force = false) => {
+    if (!clinicId) return;
+    if (loadingRef.current) {
+      if (force || !silent) pendingRefreshRef.current = true;
+      return;
+    }
 
-    if (silent && isCacheValid(clinicId)) {
+    if (silent && !force && isCacheValid(clinicId)) {
       const entry = getCacheEntry(clinicId);
       if (entry) { applyData(entry.data); return; }
     }
@@ -85,18 +90,22 @@ export function useDashboard(clinicId: string | null): UseDashboardResult {
     if (!silent) setLoading(true);
 
     try {
-      const next = await fetchAll(clinicId, controller.signal);
-      if (controller.signal.aborted) return;
-      setCacheEntry(clinicId, next);
-      applyData(next);
-      setInitialLoaded(true);
-    } catch (err: unknown) {
-      if (controller.signal.aborted) return;
-      console.error('Dashboard load error:', err);
-      if (!silent) toastRef.current.error('Failed to load dashboard data');
-      // Even on failure, stop showing the skeleton forever — surface
-      // whatever we have (defaults or last good cache) instead.
-      setInitialLoaded(true);
+      do {
+        pendingRefreshRef.current = false;
+        try {
+          const next = await fetchAll(clinicId, controller.signal);
+          if (controller.signal.aborted) return;
+          setCacheEntry(clinicId, next);
+          applyData(next);
+          setInitialLoaded(true);
+        } catch (err: unknown) {
+          if (controller.signal.aborted) return;
+          console.error('Dashboard load error:', err);
+          if (!silent) toastRef.current.error('Failed to load dashboard data');
+          setInitialLoaded(true);
+        }
+        // A change received during the fetch must get a fresh read afterward.
+      } while (pendingRefreshRef.current && !controller.signal.aborted);
     } finally {
       if (!controller.signal.aborted) {
         loadingRef.current = false;
@@ -114,11 +123,12 @@ export function useDashboard(clinicId: string | null): UseDashboardResult {
 
   useEffect(() => {
     if (clinicId) loadDashboard();
+    return () => {
+      abortRef.current?.abort();
+      loadingRef.current = false;
+      pendingRefreshRef.current = false;
+    };
   }, [clinicId, loadDashboard]);
-
-  useEffect(() => {
-    return () => { abortRef.current?.abort(); };
-  }, []);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -153,7 +163,7 @@ export function useDashboard(clinicId: string | null): UseDashboardResult {
 
     const triggerRefresh = () => {
       clearTimeout(debounce);
-      debounce = setTimeout(() => loadDashboard(true), 1500);
+      debounce = setTimeout(() => loadDashboard(true, true), 1500);
     };
 
     const channel = supabase
@@ -162,7 +172,7 @@ export function useDashboard(clinicId: string | null): UseDashboardResult {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'patients',     filter: `clinic_id=eq.${clinicId}` }, triggerRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payments',     filter: `clinic_id=eq.${clinicId}` }, triggerRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items', filter: `clinic_id=eq.${clinicId}` }, triggerRefresh)
-      .subscribe();
+      .subscribe(status => { if (status === 'SUBSCRIBED') triggerRefresh(); });
 
     return () => {
       clearTimeout(debounce);
