@@ -13,7 +13,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { TREATMENT_TYPES } from '@/lib/utils';
-import { getBookingTimestamp } from '@/lib/booking-time';
+import { getBookingTimestamp, isBookingDentistAvailable } from '@/lib/booking-time';
 
 const PHONE_RE = /^[0-9+\-\s()]{7,15}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -92,17 +92,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Clinic not found.' }, { status: 404 });
   }
 
-  // If a dentist preference was given, confirm it belongs to this clinic.
+  // Validate working days even when the patient has no dentist preference.
+  const { data: dentists, error: dentistsError } = await supabase
+    .from('dentists')
+    .select('id, schedule_days')
+    .eq('clinic_id', clinic_id);
+  if (dentistsError) {
+    return NextResponse.json({ error: 'Could not check dentist availability. Please try again.' }, { status: 500 });
+  }
   if (dentist_id) {
-    const { data: dentist } = await supabase
-      .from('dentists')
-      .select('id')
-      .eq('id', dentist_id)
-      .eq('clinic_id', clinic_id)
-      .maybeSingle();
+    const dentist = dentists?.find(d => d.id === dentist_id);
     if (!dentist) {
       return NextResponse.json({ error: 'Invalid dentist for this clinic.' }, { status: 400 });
     }
+    if (!isBookingDentistAvailable(dentist.schedule_days, requested_date)) {
+      return NextResponse.json({ error: 'This dentist is not available on the selected date. Please choose another dentist.' }, { status: 400 });
+    }
+  } else if (!dentists?.some(d => isBookingDentistAvailable(d.schedule_days, requested_date))) {
+    return NextResponse.json({ error: 'No dentists are available on this date. Please choose another date.' }, { status: 400 });
   }
 
   const now = new Date().toISOString();
