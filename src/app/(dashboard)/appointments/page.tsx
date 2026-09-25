@@ -1,4 +1,14 @@
 //src\app\(dashboard)\appointments\page.tsx
+//
+// UPDATE: added a Calendar / Requests view toggle. "Requests" shows
+// pending QR self-booking submissions (BookingRequestsPanel.tsx) with a
+// badge for the pending count, polled on an interval so new requests
+// show up without a manual refresh. Approving a request re-triggers
+// load() so the newly-created appointment appears on the calendar right
+// away if you switch back.
+//
+// currentStaff/clinicId is now also fetched here (previously clinicId
+// alone), since BookingRequestsPanel needs staffId for reviewed_by.
 
 'use client';
 
@@ -10,14 +20,20 @@ import { Appointment, Dentist, AppointmentStatus } from '@/types';
 import { WeeklyCalendar } from '@/components/appointments/WeeklyCalendar';
 import AppointmentCard from '@/components/appointments/AppointmentCard';
 import { AppointmentForm } from '@/components/appointments/AppointmentForm';
+import { BookingRequestsPanel } from '@/components/appointments/BookingRequestsPanel';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useAppToast } from '@/app/(dashboard)/layout';
-import { CalendarPlus, ChevronDown, Check } from 'lucide-react';
+import { CalendarPlus, ChevronDown, Check, CalendarDays, Inbox } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const STATUS_OPTIONS: AppointmentStatus[] = [
   'Scheduled', 'Confirmed', 'Done', 'No-show', 'Cancelled',
 ];
+
+// Poll interval for the pending-requests badge, in ms. Cheap head-count
+// query (see loadPendingCount below) — not the full request list.
+const PENDING_POLL_MS = 30_000;
 
 /* ── Custom Dropdown ── */
 interface DropdownOption { label: string; value: string; }
@@ -93,6 +109,52 @@ function CustomDropdown({
   );
 }
 
+/* ── View toggle (Calendar / Requests) ── */
+function ViewToggle({
+  view,
+  onChange,
+  pendingCount,
+}: {
+  view: 'calendar' | 'requests';
+  onChange: (v: 'calendar' | 'requests') => void;
+  pendingCount: number;
+}) {
+  return (
+    <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-white flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => onChange('calendar')}
+        className={cn(
+          'flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] md:text-[12px] font-semibold transition-colors',
+          view === 'calendar' ? 'bg-teal-700 text-white' : 'text-gray-500 hover:bg-gray-50'
+        )}
+      >
+        <CalendarDays className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Calendar</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('requests')}
+        className={cn(
+          'relative flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] md:text-[12px] font-semibold transition-colors',
+          view === 'requests' ? 'bg-teal-700 text-white' : 'text-gray-500 hover:bg-gray-50'
+        )}
+      >
+        <Inbox className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Requests</span>
+        {pendingCount > 0 && (
+          <span className={cn(
+            'flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold',
+            view === 'requests' ? 'bg-white/25 text-white' : 'bg-red-500 text-white'
+          )}>
+            {pendingCount > 9 ? '9+' : pendingCount}
+          </span>
+        )}
+      </button>
+    </div>
+  );
+}
+
 /* ── helpers ── */
 function getWeekBounds(anchor: Date): { mon: Date; sun: Date } {
   const day = anchor.getDay();
@@ -121,7 +183,11 @@ function AppointmentsContent() {
   const [dentists, setDentists]         = useState<Dentist[]>([]);
   const [loading, setLoading]           = useState(true);
   const [clinicId, setClinicId]         = useState<string | null>(null);
+  const [staffId, setStaffId]           = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<Date>(new Date());
+
+  const [view, setView] = useState<'calendar' | 'requests'>('calendar');
+  const [pendingCount, setPendingCount] = useState(0);
 
   const { mon, sun } = useMemo(() => getWeekBounds(selectedWeek), [selectedWeek]);
   const isCurrentWeek = useMemo(() => isSameWeek(selectedWeek, new Date()), [selectedWeek]);
@@ -141,8 +207,9 @@ function AppointmentsContent() {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: staffData } = await supabase
-        .from('staff').select('clinic_id').eq('auth_user_id', user.id).single();
+        .from('staff').select('id, clinic_id').eq('auth_user_id', user.id).single();
       setClinicId(staffData?.clinic_id ?? null);
+      setStaffId(staffData?.id ?? null);
     }
 
     const weekStart = mon.toISOString().split('T')[0];
@@ -176,6 +243,27 @@ function AppointmentsContent() {
   }, [filterDentist, filterStatus, mon, sun]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Pending booking-requests count, for the Requests tab badge. Cheap
+  // head-only query, polled so front-desk staff notice new requests
+  // without needing to switch tabs.
+  const loadPendingCount = useCallback(async () => {
+    if (!clinicId) return;
+    const supabase = createClient();
+    const { count } = await supabase
+      .from('booking_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .eq('status', 'pending');
+    setPendingCount(count ?? 0);
+  }, [clinicId]);
+
+  useEffect(() => {
+    if (!clinicId) return;
+    loadPendingCount();
+    const interval = setInterval(loadPendingCount, PENDING_POLL_MS);
+    return () => clearInterval(interval);
+  }, [clinicId, loadPendingCount]);
 
   useEffect(() => {
     const id = searchParams.get('id');
@@ -214,49 +302,69 @@ function AppointmentsContent() {
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 justify-between">
-        <div className="flex items-center gap-1.5">
-          <CustomDropdown
-            options={dentistOptions}
-            value={filterDentist}
-            onChange={setFilterDentist}
-            placeholder="All Dentists"
-          />
-          <CustomDropdown
-            options={statusOptions}
-            value={filterStatus}
-            onChange={setFilterStatus}
-            placeholder="All Statuses"
-          />
-          {(filterDentist || filterStatus) && (
-            <button
-              onClick={() => { setFilterDentist(''); setFilterStatus(''); }}
-              className="text-[11px] text-gray-400 hover:text-gray-600 px-1.5 py-1 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              Clear
-            </button>
+      <div className="flex items-center gap-2 justify-between flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <ViewToggle view={view} onChange={setView} pendingCount={pendingCount} />
+
+          {view === 'calendar' && (
+            <>
+              <CustomDropdown
+                options={dentistOptions}
+                value={filterDentist}
+                onChange={setFilterDentist}
+                placeholder="All Dentists"
+              />
+              <CustomDropdown
+                options={statusOptions}
+                value={filterStatus}
+                onChange={setFilterStatus}
+                placeholder="All Statuses"
+              />
+              {(filterDentist || filterStatus) && (
+                <button
+                  onClick={() => { setFilterDentist(''); setFilterStatus(''); }}
+                  className="text-[11px] text-gray-400 hover:text-gray-600 px-1.5 py-1 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </>
           )}
         </div>
 
-        <Link href="/appointments/new" className="flex-shrink-0">
-          <Button size="sm" className="p-1.5 md:text-[12px] md:px-3 md:py-1.5 md:gap-1.5">
-            <CalendarPlus className="w-4 h-4 md:w-3.5 md:h-3.5" />
-            <span className="hidden md:inline">New Appointment</span>
-          </Button>
-        </Link>
+        {view === 'calendar' && (
+          <Link href="/appointments/new" className="flex-shrink-0">
+            <Button size="sm" className="p-1.5 md:text-[12px] md:px-3 md:py-1.5 md:gap-1.5">
+              <CalendarPlus className="w-4 h-4 md:w-3.5 md:h-3.5" />
+              <span className="hidden md:inline">New Appointment</span>
+            </Button>
+          </Link>
+        )}
       </div>
 
-      {/* Calendar */}
-      <WeeklyCalendar
-        appointments={appointments}
-        loading={loading}
-        onSelectAppointment={openDetail}
-        onReschedule={handleReschedule}
-        toast={toast}
-        onBulkUpdated={() => load()}
-        referenceDate={selectedWeek}
-        onWeekChange={(d) => setSelectedWeek(d)}
-      />
+      {/* Calendar view */}
+      {view === 'calendar' && (
+        <WeeklyCalendar
+          appointments={appointments}
+          loading={loading}
+          onSelectAppointment={openDetail}
+          onReschedule={handleReschedule}
+          toast={toast}
+          onBulkUpdated={() => load()}
+          referenceDate={selectedWeek}
+          onWeekChange={(d) => setSelectedWeek(d)}
+        />
+      )}
+
+      {/* Requests view */}
+      {view === 'requests' && clinicId && staffId && (
+        <BookingRequestsPanel
+          clinicId={clinicId}
+          staffId={staffId}
+          toast={toast}
+          onApproved={() => { load(); loadPendingCount(); }}
+        />
+      )}
 
       {/* Detail Modal */}
       <Modal
