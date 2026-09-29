@@ -149,6 +149,8 @@ export interface BookingRequest {
   last_name: string;
   contact_number: string;
   email: string | null;
+  birthday: string | null;
+  address: string | null;
   treatment_type: string;
   requested_date: string;
   requested_time: string;
@@ -172,6 +174,8 @@ export interface PublicBookingFormData {
   last_name: string;
   contact_number: string;
   email: string;
+  birthday: string;
+  address: string;
   treatment_type: string;
   requested_date: string;
   requested_time: string;

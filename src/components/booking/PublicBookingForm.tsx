@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/Button';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { TimePicker } from '@/components/ui/TimePicker';
-import { TREATMENT_TYPES, formatDate, formatTime } from '@/lib/utils';
+import { TREATMENT_TYPES, formatDate, formatTime, calculateAge } from '@/lib/utils';
 import { getBookingToday, isFutureBooking, isBookingDentistAvailable } from '@/lib/booking-time';
 import { ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -53,6 +53,8 @@ const EMPTY_FORM: PublicBookingFormData = {
   last_name: '',
   contact_number: '',
   email: '',
+  birthday: '',
+  address: '',
   treatment_type: '',
   requested_date: '',
   requested_time: '09:00',
@@ -296,6 +298,22 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
         />
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <DatePicker
+          label="Birthday (optional)"
+          placeholder="Select birthday"
+          value={parseDateString(form.birthday)}
+          onChange={date => set('birthday', date ? formatDateString(date) : '')}
+          maxDate={parseDateString(today)}
+        />
+        <Input
+          label="Age"
+          value={calculateAge(form.birthday) ?? ''}
+          placeholder="Calculated from birthday"
+          readOnly
+        />
+      </div>
+
       {/* Contact */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input
@@ -321,6 +339,16 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
           error={errors.email}
         />
       </div>
+
+      <Textarea
+        label="Home Address (optional)"
+        name="street-address"
+        autoComplete="street-address"
+        placeholder="123 Mabini St., Calamba City, Laguna"
+        value={form.address}
+        onChange={e => set('address', e.target.value)}
+        rows={2}
+      />
 
       {/* Treatment */}
       <CustomSelect
@@ -447,6 +475,9 @@ export function PublicBookingForm({ clinicId, dentists }: PublicBookingFormProps
               ['Name', `${reviewBooking.first_name} ${reviewBooking.last_name}`],
               ['Contact number', reviewBooking.contact_number],
               ['Email', reviewBooking.email || 'Not provided'],
+              ['Birthday', reviewBooking.birthday ? formatDate(reviewBooking.birthday) : 'Not provided'],
+              ['Age', reviewBooking.birthday ? `${calculateAge(reviewBooking.birthday)} years old` : 'Not provided'],
+              ['Home address', reviewBooking.address.trim() || 'Not provided'],
               ['Treatment or service', reviewBooking.treatment_type],
               ['Preferred date', formatDate(reviewBooking.requested_date)],
               ['Preferred time', `${formatTime(reviewBooking.requested_time)} (Philippine time)`],

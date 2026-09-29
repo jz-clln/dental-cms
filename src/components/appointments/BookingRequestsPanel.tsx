@@ -32,7 +32,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { BookingRequest } from '@/types';
 import { Button } from '@/components/ui/Button';
-import { formatDateShort, formatTime } from '@/lib/utils';
+import { calculateAge, formatDateShort, formatTime } from '@/lib/utils';
 import { Inbox, Check, X, Phone, Mail, StickyNote, UserCheck } from 'lucide-react';
 
 interface BookingRequestsPanelProps {
@@ -100,6 +100,8 @@ export function BookingRequestsPanel({ clinicId, staffId, toast, onApproved }: B
             last_name: req.last_name,
             contact_number: req.contact_number,
             email: req.email,
+            birthday: req.birthday || null,
+            address: req.address || null,
             consent_given: req.consent_given,
             consent_given_at: req.consent_given_at,
           })
@@ -209,6 +211,13 @@ export function BookingRequestsPanel({ clinicId, staffId, toast, onApproved }: B
                   </span>
                 )}
               </div>
+
+              {(req.birthday || req.address) && (
+                <div className="mt-1 space-y-1 text-[12px] text-gray-500">
+                  {req.birthday && <p>Age: {calculateAge(req.birthday)} years old</p>}
+                  {req.address && <p className="whitespace-pre-wrap break-words">Address: {req.address}</p>}
+                </div>
+              )}
 
               <div className="mt-2.5 text-[13px] text-gray-700">
                 <span className="font-medium">{req.treatment_type}</span> ·{' '}

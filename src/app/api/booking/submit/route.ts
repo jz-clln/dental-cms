@@ -13,7 +13,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { TREATMENT_TYPES } from '@/lib/utils';
-import { getBookingTimestamp, isBookingDentistAvailable } from '@/lib/booking-time';
+import { getBookingToday, getBookingTimestamp, isBookingDentistAvailable } from '@/lib/booking-time';
 
 const PHONE_RE = /^[0-9+\-\s()]{7,15}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
     last_name,
     contact_number,
     email,
+    birthday,
+    address,
     treatment_type,
     requested_date,
     requested_time,
@@ -64,6 +66,16 @@ export async function POST(request: NextRequest) {
   }
   if (typeof requested_time !== 'string' || !/^\d{2}:\d{2}$/.test(requested_time)) {
     return NextResponse.json({ error: 'Pick a valid time.' }, { status: 400 });
+  }
+  if (birthday != null && birthday !== '' && (
+    typeof birthday !== 'string' ||
+    !Number.isFinite(getBookingTimestamp(birthday, '00:00')) ||
+    birthday > getBookingToday()
+  )) {
+    return NextResponse.json({ error: 'Enter a valid birthday that is not in the future.' }, { status: 400 });
+  }
+  if (address != null && typeof address !== 'string') {
+    return NextResponse.json({ error: 'Enter a valid home address.' }, { status: 400 });
   }
   const bookingTimestamp = getBookingTimestamp(requested_date, requested_time);
   if (!Number.isFinite(bookingTimestamp)) {
@@ -124,6 +136,8 @@ export async function POST(request: NextRequest) {
     last_name: last_name.trim(),
     contact_number: contact_number.trim(),
     email: email?.trim() || null,
+    birthday: birthday || null,
+    address: address?.trim() || null,
     treatment_type,
     requested_date,
     requested_time,
